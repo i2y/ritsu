@@ -97,6 +97,16 @@ generated: generated/requests/source/shared/office.cal
 generated: generated/requests.zip
 ```
 
+The build is confined: the crate is written in a user-private temporary directory, cargo and rustc
+run from `/` with the toolchain named explicitly, and no `rust-toolchain.toml` or
+`.cargo/config.toml` above the temporary directory chooses the toolchain, a rustc wrapper, flags or
+the wasm linker. A bundle holds only regular files under the project root; a use path or a link that
+leaves the root is refused. `--diff-from` refuses paths outside the earlier bundle, links and
+special files in a directory bundle, and a zip whose local and central names differ. `--out` itself
+may be a link, but `ritsu gen` refuses links below it, writes through a temporary file beside each
+output, and does not follow a link when it removes what an earlier run wrote. The diff in a bundle
+compares the calendars deadlines count by, as it does routes, the organization and masters.
+
 The module imports nothing. A server loads it, checks it against the SHA-256 in `wasm.json`, and
 calls each kind's `start`, `next` and `worked` through it, with the same JSON as the packages'
 entries take. It answers every vector of the examples as the reference interpreter does, in English

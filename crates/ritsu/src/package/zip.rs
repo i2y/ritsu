@@ -52,7 +52,7 @@ pub fn write(files: &[(String, Vec<u8>)]) -> Result<Vec<u8>, Text> {
         }
         // a path the reader refuses is not written: none that goes up, none absolute
         if let Some(why) = ritsu_base::modules::tar::path_why(path) {
-            return Err(ritsu_base::modules::tar::Error::Path(path.clone(), why).text());
+            return Err(path_error(path, why));
         }
         let crc = crc32(bytes);
         let packed = deflate(bytes);
@@ -148,7 +148,7 @@ pub fn read(z: &[u8]) -> Result<Vec<(String, Vec<u8>)>, Text> {
             return Err(tr!("`{path}` に、ritsu の書くバンドルには無い拡張フィールド、コメント、フラグ、時刻か属性があります", "`{path}` has an extra field, a comment, a flag, a time or attributes no bundle ritsu writes has"));
         }
         if let Some(why) = ritsu_base::modules::tar::path_why(&path) {
-            return Err(ritsu_base::modules::tar::Error::Path(path, why).text());
+            return Err(path_error(&path, why));
         }
         if !seen.insert(path.clone()) {
             return Err(tr!("`{path}` が二度あります", "`{path}` twice"));
@@ -162,6 +162,9 @@ pub fn read(z: &[u8]) -> Result<Vec<(String, Vec<u8>)>, Text> {
         }
         if u32_at(offset + 18)? as usize != csize || u32_at(offset + 22)? as usize != size || usize::from(u16_at(offset + 26)?) != nlen || u16_at(offset + 28)? != 0 {
             return Err(tr!("`{path}` のローカルヘッダーが、中央ディレクトリの項目と合いません", "the local header of `{path}` is not as its central entry says"));
+        }
+        if z.get(offset + 30..offset + 30 + nlen) != Some(name) {
+            return Err(tr!("`{path}` のローカルヘッダーの名前が、中央ディレクトリの項目と違います", "the local header's name of `{path}` is not the one its central entry says"));
         }
         let start = offset + 30 + nlen;
         let data = z.get(start..start + csize).ok_or_else(|| tr!("`{path}` が zip の終わりを越えます", "`{path}` ends past the zip"))?;
@@ -181,6 +184,28 @@ pub fn read(z: &[u8]) -> Result<Vec<(String, Vec<u8>)>, Text> {
         return Err(tr!("ファイルの間か中央ディレクトリの後に、余分なバイトがあります", "something is between its files or after its central directory"));
     }
     Ok(out)
+}
+
+/// Why a path a bundle would hold is refused, with the characters that cannot print escaped.
+pub fn path_error(path: &str, why: ritsu_base::modules::tar::PathWhy) -> Text {
+    use ritsu_base::modules::tar::{MAX_PARTS, MAX_PATH, PathWhy as W};
+    let p = ritsu_base::text::escape_controls(path);
+    let w = match why {
+        W::NotUtf8 => tr!("UTF-8 ではありません", "it is not UTF-8"),
+        W::Empty => tr!("空です", "it is empty"),
+        W::Absolute => tr!("絶対パスです", "it is absolute"),
+        W::EmptyPart => tr!("空の要素があります", "it has an empty part"),
+        W::Dot => tr!("`.` という要素があります", "it has a part `.`"),
+        W::DotDot => tr!("`..` という要素があります", "it has a part `..`"),
+        W::Backslash => tr!("`\\` があります", "it has a `\\` in it"),
+        W::Nul => tr!("NUL があります", "it has a NUL in it"),
+        W::Control => tr!("制御文字があります", "it has a control character in it"),
+        W::DotStart => tr!("`.` で始まる要素があります", "it has a part that starts with `.`"),
+        W::AtStart => tr!("最初の要素が `@` で始まります", "its first part starts with `@`"),
+        W::TooLong => tr!("{MAX_PATH} バイトを超えます", "it is longer than {MAX_PATH} bytes"),
+        W::TooDeep => tr!("要素が {MAX_PARTS} 個を超えます", "it has more than {MAX_PARTS} parts"),
+    };
+    tr!("バンドルのファイルのパス `{p}` は受け付けません。", "the path `{p}` of a bundle's file is refused: ").then(&w)
 }
 
 fn too_soon() -> Text {
@@ -436,7 +461,8 @@ pub fn inflate(data: &[u8], size: usize) -> Result<Vec<u8>, Text> {
                     return Err(tr!("大きさより多くのバイトがあります", "more bytes than its size"));
                 }
             },
-            _ => return Err(tr!("動的な符号のブロックで、バンドルの使わない形です", "a block of dynamic codes, which a bundle does not use")),
+            2 => return Err(tr!("動的な符号のブロックで、バンドルの使わない形です", "a block of dynamic codes, which a bundle does not use")),
+            _ => return Err(tr!("deflate に無い型のブロックです", "a block of a type deflate does not have")),
         }
         if out.len() > size {
             return Err(tr!("大きさより多くのバイトがあります", "more bytes than its size"));
@@ -494,5 +520,26 @@ mod tests {
         let mut flipped = z.clone();
         flipped[40] ^= 0xff;
         assert!(read(&flipped).is_err());
+    }
+}
+
+#[cfg(test)]
+mod entry_tests {
+    use super::*;
+
+    #[test]
+    fn a_local_name_that_differs_is_refused() {
+        let z = write(&[("source/leave.ringi".to_string(), b"x".to_vec()), ("wasm.json".to_string(), b"{}".to_vec())]).unwrap();
+        let mut bad = z.clone();
+        // the first file's local header is at 0; flip one byte of its name there alone
+        let at = 30 + "source/".len();
+        bad[at] = b'L';
+        assert!(read(&bad).is_err());
+    }
+
+    #[test]
+    fn control_characters_make_a_path_refused() {
+        assert!(ritsu_base::modules::tar::path_why("a\nb").is_some());
+        assert!(write(&[("a\nb".to_string(), Vec::new())]).is_err());
     }
 }

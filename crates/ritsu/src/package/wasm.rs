@@ -30,6 +30,9 @@ use ritsu_base::tr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(unix)]
+use std::sync::atomic::{AtomicI32, Ordering as AtomicOrdering};
+
 /// The module, in `<out>/requests/`.
 pub const MODULE: &str = "kinds.wasm";
 
@@ -87,9 +90,15 @@ pub fn make(files: &[(String, String, Option<String>)], name: &str, kinds: &[Doo
 /// the drivers of the books' clients, which the module leaves out with the clients), by their paths,
 /// in the order of their bytes.
 fn for_wasm(files: &[(String, String, Option<String>)]) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = files.iter().map(|(p, text, _)| (p.clone(), if p == "Cargo.toml" { without_native(text) } else { text.clone() })).collect();
+    let mut out: Vec<(String, String)> = files.iter().map(|(p, text, _)| (p.clone(), if p == "Cargo.toml" { own_workspace(&without_native(text)) } else { text.clone() })).collect();
     out.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
     out
+}
+
+/// The manifest of the temporary crate, made one workspace of its own so that no `Cargo.toml`
+/// above the scratch directory can take it into a workspace.
+fn own_workspace(toml: &str) -> String {
+    format!("{toml}\n[workspace]\n")
 }
 
 /// A manifest without the table of what the crate depends on for every target but wasm32: the
@@ -173,21 +182,28 @@ fn about(kinds: &[Door], contract: u32, lang: &str, sha: &str, source: &str, rus
     format!("{}\n", j.pretty())
 }
 
-/// A directory of its own under the system's temporary directory, removed with it.
+/// A directory of its own, readable by the user alone, removed with it.
 struct Scratch(PathBuf);
 
 impl Scratch {
-    fn new() -> std::io::Result<Scratch> {
+    /// Err(None) when there is no directory another user cannot change to make it under.
+    fn new() -> Result<Scratch, Option<std::io::Error>> {
         use std::sync::atomic::{AtomicU32, Ordering};
         static N: AtomicU32 = AtomicU32::new(0);
-        let base = std::env::temp_dir();
+        let base = scratch_base().ok_or(None)?;
+        clean_finished(&base);
         loop {
             let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
             let d = base.join(format!("ritsu-wasm-{}-{}-{stamp}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
             match std::fs::create_dir(&d) {
-                Ok(()) => return Ok(Scratch(d)),
+                Ok(()) => {
+                    // removed with the value, also when it cannot be made the user's alone
+                    let s = Scratch(d);
+                    private(&s.0)?;
+                    return Ok(s);
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(e) => return Err(e),
+                Err(e) => return Err(Some(e)),
             }
         }
     }
@@ -199,6 +215,175 @@ impl Drop for Scratch {
     }
 }
 
+/// The directory the scratch directory is made under: the system's temporary directory when neither
+/// it nor a directory above it can be changed by another user; else the user's runtime directory,
+/// else a directory of ritsu's in the user's cache. The build is run from `/`, so a file planted
+/// above the scratch directory chooses neither the toolchain nor cargo's settings; this check keeps
+/// the crate itself somewhere another user cannot replace. None when no candidate is such a place.
+fn scratch_base() -> Option<PathBuf> {
+    let mut candidates = vec![std::env::temp_dir()];
+    if let Some(d) = std::env::var_os("XDG_RUNTIME_DIR").filter(|x| !x.is_empty()) {
+        candidates.push(PathBuf::from(d));
+    }
+    if let Some(home) = std::env::var_os("HOME").filter(|x| !x.is_empty()) {
+        candidates.push(PathBuf::from(home).join(".cache").join("ritsu").join("wasm"));
+    }
+    // A build or test tree ritsu is run from is a better last resort than failing where the
+    // system's temporary directory is shared and the user's cache cannot be written. In an
+    // installation this directory is usually not writable, and the loop leaves it out.
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        candidates.push(dir.join("ritsu-wasm"));
+    }
+    for d in candidates {
+        if d.starts_with(std::env::temp_dir()) || d.exists() || std::fs::create_dir_all(&d).is_ok() {
+            if d.exists() && ancestors_private(&d) {
+                return Some(d);
+            }
+        }
+    }
+    None
+}
+
+/// Whether no directory at or above `d` can be changed by another user: each is owned by root or by
+/// this user, and neither its group nor others can write to it.
+#[cfg(unix)]
+fn ancestors_private(d: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    unsafe extern "C" {
+        fn getuid() -> u32;
+    }
+    let me = unsafe { getuid() };
+    // the path as it opens, so that a symbolic link cannot make a shared directory look private
+    let Ok(real) = std::fs::canonicalize(d) else { return false };
+    real.ancestors().all(|x| std::fs::metadata(x).is_ok_and(|m| m.is_dir() && (m.uid() == 0 || m.uid() == me) && m.mode() & 0o022 == 0))
+}
+
+#[cfg(not(unix))]
+fn ancestors_private(d: &Path) -> bool {
+    d.ancestors().all(|x| x.is_dir())
+}
+
+#[cfg(unix)]
+fn private(d: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(d, std::fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn private(_d: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// The scratch directories of runs that are no longer alive, best effort. The name holds the
+/// process's id after `ritsu-wasm-`.
+fn clean_finished(base: &Path) {
+    let Ok(rd) = std::fs::read_dir(base) else { return };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(rest) = name.strip_prefix("ritsu-wasm-") else { continue };
+        let Some(pid) = rest.split('-').next().and_then(|x| x.parse::<i32>().ok()).filter(|p| *p > 0) else { continue };
+        if pid != std::process::id() as i32 && !alive(pid) {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+#[cfg(unix)]
+fn alive(pid: i32) -> bool {
+    if unsafe { kill(pid, 0) } == 0 {
+        return true;
+    }
+    // EPERM: there is such a process, but it is not this user's
+    std::io::Error::last_os_error().raw_os_error() == Some(1)
+}
+
+#[cfg(not(unix))]
+fn alive(_pid: i32) -> bool {
+    true
+}
+
+/// The process group of the tool that runs now, 0 when none does.
+#[cfg(unix)]
+static CHILD: AtomicI32 = AtomicI32::new(0);
+
+/// The signal the run of the tool that runs now (or ran last) was given, 0 when none was.
+#[cfg(unix)]
+static SIGNALED: AtomicI32 = AtomicI32::new(0);
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn kill(pid: i32, sig: i32) -> i32;
+    // the handler as C's `sighandler_t`, a number: SIG_DFL is 0, SIG_IGN is 1
+    fn signal(signum: i32, handler: usize) -> usize;
+}
+
+/// SIGINT and SIGTERM, which a run of a tool hands to the tool.
+#[cfg(unix)]
+const HANDED: [i32; 2] = [2, 15];
+
+/// The signal a run of a tool was given while the tool ran: note it, and give it to the tool's own
+/// process group so that cargo's children stop with it. Only `kill` and the atomics run here.
+#[cfg(unix)]
+extern "C" fn sighed(n: i32) {
+    SIGNALED.store(n, AtomicOrdering::SeqCst);
+    let pid = CHILD.load(AtomicOrdering::SeqCst);
+    if pid > 0 {
+        unsafe { kill(-pid, n) };
+    }
+}
+
+/// Run a tool with its output read, in a process group of its own on Unix. While it runs, a SIGINT
+/// or a SIGTERM of this process is handed to the tool's group (one this process was started
+/// ignoring stays ignored), so that the tool stops with its children and the run answers as the
+/// stopped tool does; before and after the run, the two signals do what they did.
+#[cfg(unix)]
+fn watched(c: &mut Command) -> std::io::Result<std::process::Output> {
+    use std::os::unix::process::CommandExt;
+    const SIG_IGN: usize = 1;
+    c.process_group(0);
+    SIGNALED.store(0, AtomicOrdering::SeqCst);
+    let before = HANDED.map(|n| unsafe { signal(n, sighed as extern "C" fn(i32) as usize) });
+    for (n, h) in HANDED.into_iter().zip(before) {
+        if h == SIG_IGN {
+            unsafe { signal(n, SIG_IGN) };
+        }
+    }
+    let out = c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().and_then(|child| {
+        let pid = child.id() as i32;
+        CHILD.store(pid, AtomicOrdering::SeqCst);
+        // a signal that came before the tool's id was known
+        let n = SIGNALED.load(AtomicOrdering::SeqCst);
+        if n != 0 {
+            unsafe { kill(-pid, n) };
+        }
+        let out = child.wait_with_output();
+        CHILD.store(0, AtomicOrdering::SeqCst);
+        out
+    });
+    for (n, h) in HANDED.into_iter().zip(before) {
+        unsafe { signal(n, h) };
+    }
+    out
+}
+
+#[cfg(not(unix))]
+fn watched(c: &mut Command) -> std::io::Result<std::process::Output> {
+    c.output()
+}
+
+/// Whether the run of the tool that ran last was given a SIGINT or a SIGTERM.
+#[cfg(unix)]
+fn signaled() -> bool {
+    SIGNALED.load(AtomicOrdering::SeqCst) != 0
+}
+
+#[cfg(not(unix))]
+fn signaled() -> bool {
+    false
+}
+
 /// The program of a tool: the variable's (`CARGO`, `RUSTC`), as cargo reads them, else its name on
 /// the path.
 fn tool(var: &str, name: &str) -> std::ffi::OsString {
@@ -207,7 +392,7 @@ fn tool(var: &str, name: &str) -> std::ffi::OsString {
 
 /// A command of a tool, run in `dir` with nothing of cargo's or rustc's settings from the
 /// environment but the tools themselves: cargo's home and target directory are the run's own.
-fn clean(program: &std::ffi::OsString, dir: &Path, scratch: &Path) -> Command {
+fn clean(program: &std::ffi::OsString, dir: &Path, scratch: &Path, toolchain: Option<&str>) -> Command {
     let mut c = Command::new(program);
     c.current_dir(dir);
     for (k, _) in std::env::vars_os() {
@@ -217,6 +402,9 @@ fn clean(program: &std::ffi::OsString, dir: &Path, scratch: &Path) -> Command {
         }
     }
     c.env("CARGO_HOME", scratch.join("cargo-home")).env("CARGO_TARGET_DIR", scratch.join("target"));
+    if let Some(t) = toolchain {
+        c.env("RUSTUP_TOOLCHAIN", t);
+    }
     c
 }
 
@@ -258,27 +446,60 @@ fn get_rust() -> ritsu_base::text::Text {
     )
 }
 
+/// The toolchain the build names for rustup's shims: the caller's `RUSTUP_TOOLCHAIN` when it is
+/// set, else the default rustup answers outside any directory a file of it could name a toolchain
+/// from. Nothing changes a cargo or rustc that is no shim.
+fn toolchain() -> Option<String> {
+    if let Some(t) = std::env::var("RUSTUP_TOOLCHAIN").ok().filter(|x| !x.is_empty()) {
+        return Some(t);
+    }
+    let o = Command::new("rustup").current_dir("/").args(["show", "active-toolchain"]).output().ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&o.stdout).split_whitespace().next().map(str::to_string)
+}
+
 /// The crate built for wasm32-unknown-unknown: the module, and what `rustc -V` says of the compiler.
 fn build(files: &[(String, String)], name: &str, said: Lang) -> Result<(Vec<u8>, String), Refusal> {
     let (cargo, rustc) = (tool("CARGO", "cargo"), tool("RUSTC", "rustc"));
-    let scratch = Scratch::new().map_err(|e| refusal(2, ritsu_base::cli::cannot_create(&std::env::temp_dir().display().to_string(), &e), said))?;
+    let toolchain = toolchain();
+    let scratch = match Scratch::new() {
+        Ok(s) => s,
+        Err(None) => {
+            return Err(refusal(
+                2,
+                tr!(
+                    "`--extra wasm` は、ほかの利用者が変えられない一時のディレクトリが見つからないので、何も書きません。自分だけが書けるディレクトリを TMPDIR に指定してください",
+                    "`--extra wasm` finds no temporary directory another user cannot change, so nothing is written; set TMPDIR to a directory only you can write to"
+                ),
+                said,
+            ));
+        }
+        Err(Some(e)) => return Err(refusal(2, ritsu_base::cli::cannot_create(&std::env::temp_dir().display().to_string(), &e), said)),
+    };
     let dir = scratch.0.join("crate");
-    let ran = |c: &mut Command| c.output();
+    // a run of a tool this process was signaled in stops the build, whatever the tool answered
+    let stopped = || refusal(2, tr!("`--extra wasm` は、組むあいだにシグナルで止められたので、何も書きません。", "`--extra wasm` was stopped by a signal while it built, so nothing is written"), said);
+    let ran = |c: &mut Command| {
+        let o = watched(c);
+        if signaled() { Err(stopped()) } else { Ok(o) }
+    };
     let get = get_rust();
     let missing = |what: &str| refusal(2, tr!("`--extra wasm` は、{what} が見つからないので、何も書きません。", "`--extra wasm` cannot find {what}, so nothing is written; ").then(&get), said);
     if let Err(e) = std::fs::create_dir_all(&dir) {
         return Err(refusal(2, ritsu_base::cli::cannot_create(&dir.display().to_string(), &e), said));
     }
-    match ran(clean(&cargo, &dir, &scratch.0).arg("-V")) {
+    match ran(clean(&cargo, Path::new("/"), &scratch.0, toolchain.as_deref()).arg("-V"))? {
         Ok(o) if o.status.success() => {}
         _ => return Err(missing("cargo")),
     }
-    let version = match ran(clean(&rustc, &dir, &scratch.0).arg("-V")) {
+    let version = match ran(clean(&rustc, Path::new("/"), &scratch.0, toolchain.as_deref()).arg("-V"))? {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
         _ => return Err(missing("rustc")),
     };
     // the standard library of the target: rustc names its directory whether it is there or not
-    let libdir = match ran(clean(&rustc, &dir, &scratch.0).args(["--print", "target-libdir", "--target", TARGET])) {
+    let libdir = match ran(clean(&rustc, Path::new("/"), &scratch.0, toolchain.as_deref()).args(["--print", "target-libdir", "--target", TARGET]))? {
         Ok(o) if o.status.success() => Some(PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())),
         _ => None,
     };
@@ -308,7 +529,18 @@ fn build(files: &[(String, String)], name: &str, said: Lang) -> Result<(Vec<u8>,
     let (program, args) = line.split_first().expect("the line names cargo");
     debug_assert_eq!(program, "cargo");
     let (sub, rest) = args.split_first().expect("the line names cargo's command");
-    let o = match ran(clean(&cargo, &dir, &scratch.0).arg(sub).args(["--offline", "--quiet"]).args(rest)) {
+    let manifest = dir.join("Cargo.toml");
+    let overrides = [
+        "--config",
+        "build.rustc-wrapper=\"\"",
+        "--config",
+        "build.rustc-workspace-wrapper=\"\"",
+        "--config",
+        "build.rustflags=[]",
+        "--config",
+        "target.wasm32-unknown-unknown.linker=\"rust-lld\"",
+    ];
+    let o = match ran(clean(&cargo, Path::new("/"), &scratch.0, toolchain.as_deref()).arg(sub).args(["--offline", "--quiet", "--manifest-path"]).arg(&manifest).args(overrides).args(rest))? {
         Ok(o) => o,
         Err(_) => return Err(missing("cargo")),
     };
@@ -433,5 +665,76 @@ mod tests {
         let mut m = b"\0asm\x01\0\0\0".to_vec();
         m.extend([2, 9, 1, 3, b'e', b'n', b'v', 1, b'f', 0, 0]);
         assert_eq!(shape(&m), Err("it imports 1, the first `env`.`f`".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod scratch_tests {
+    use super::*;
+
+    #[test]
+    fn the_scratch_crate_is_a_workspace_of_its_own() {
+        assert!(own_workspace("[package]\nname = \"p\"\n").ends_with("\n[workspace]\n"));
+    }
+
+    #[test]
+    fn commands_are_run_from_the_root_with_the_toolchain_named() {
+        let c = clean(&std::ffi::OsString::from("cargo"), Path::new("/"), Path::new("/tmp/ritsu-test"), Some("stable"));
+        assert_eq!(c.get_current_dir(), Some(Path::new("/")));
+        assert_eq!(c.get_envs().find(|(k, _)| *k == "RUSTUP_TOOLCHAIN").and_then(|(_, v)| v), Some(std::ffi::OsStr::new("stable")));
+        assert_eq!(c.get_envs().find(|(k, _)| *k == "CARGO_HOME").and_then(|(_, v)| v), Some(std::ffi::OsStr::new("/tmp/ritsu-test/cargo-home")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_scratch_directory_is_readable_by_the_user_alone() {
+        use std::os::unix::fs::PermissionsExt;
+        let s = Scratch::new().unwrap();
+        assert_eq!(std::fs::metadata(&s.0).unwrap().permissions().mode() & 0o777, 0o700);
+    }
+
+    #[test]
+    fn a_finished_processes_scratch_directory_is_cleaned() {
+        let base = std::env::current_exe().unwrap().parent().unwrap().join(format!("ritsu-clean-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let stale = base.join(format!("ritsu-wasm-{}-0-0", i32::MAX));
+        std::fs::create_dir(&stale).unwrap();
+        clean_finished(&base);
+        assert!(!stale.exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_shared_temporaries_permissions_fail_the_check() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = std::env::current_exe().unwrap().parent().unwrap().join(format!("ritsu-ancestors-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        assert!(ancestors_private(&base));
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o777)).unwrap();
+        assert!(!ancestors_private(&base));
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// After a run of a tool, SIGINT and SIGTERM do what they did before it, so that a build that
+    /// ended does not keep the rest of the run from stopping.
+    #[cfg(unix)]
+    #[test]
+    fn the_signals_do_what_they_did_after_a_run() {
+        // each signal's handler, put back as it was
+        let now = || {
+            HANDED.map(|n| unsafe {
+                let h = signal(n, 0);
+                signal(n, h);
+                h
+            })
+        };
+        let before = now();
+        watched(&mut Command::new("true")).unwrap();
+        assert_eq!(now(), before);
+        assert!(!signaled());
     }
 }

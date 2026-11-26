@@ -28,6 +28,7 @@ use crate::suite::Suite;
 use ritsu_base::json::Json;
 use ritsu_base::text::{Lang, Text};
 use ritsu_ports::{DiffHeld, DiffSide};
+use std::path::Path;
 use std::rc::Rc;
 
 /// How many requesters a line names before it counts the rest (the JSON holds them all).
@@ -373,6 +374,7 @@ pub fn diff(old: &Side, new: &Side, suite: &Suite, opts: &Options, budget: Optio
     // what the pages say otherwise
     let skip: &[&str] = if compared && !apart { &["route", "examples", "scenarios"] } else { &["examples", "scenarios"] };
     let mut sections = sections_of(&o.page, &n.page, skip, made);
+    sections.extend(calendar_sections(&o, &n, made)?);
     // the approvers, version by version of the organization
     let mut approvers = Vec::new();
     let mut no_people = None;
@@ -437,6 +439,64 @@ pub fn diff(old: &Side, new: &Side, suite: &Suite, opts: &Options, budget: Optio
     };
     d.in_progress = in_progress(&d, nf.effective_from.map(|(day, _)| day), made);
     Ok(d)
+}
+
+/// The calendars the two requests count their deadlines by, compared as koyomi compares two
+/// versions of one calendar. A calendar whose answer changes is one section of the page; without
+/// it, a request whose own lines do not change would read as unchanged while its dates move.
+fn calendar_sections(o: &Read, n: &Read, made: Lang) -> Result<Vec<Section>, Refused> {
+    use crate::ast::UseKind;
+    let mut out = Vec::new();
+    let Some(dates) = o.run.suite.dates.clone() else { return Ok(out) };
+    for ou in o.file().uses.iter().filter(|u| u.kind == UseKind::Calendar) {
+        let Some(nu) = n.file().uses.iter().find(|u| u.kind == UseKind::Calendar && u.alias.as_ref().map(|a| a.ascii()) == ou.alias.as_ref().map(|a| a.ascii()) && u.path == ou.path) else { continue };
+        let (op, np) = match (crate::names::beside(&o.side.read, &ou.path), crate::names::beside(&n.side.read, &nu.path)) {
+            (Ok(a), Ok(b)) => (a, b),
+            _ => continue,
+        };
+        let read = |side: &Read, path: &Path| -> Result<ritsu_ports::CalendarFacts, Refused> {
+            within(&side.side.files, || dates.calendar(path)).map_err(|said| {
+                let first = said.first().map(|x| x.message.clone()).unwrap_or_default();
+                Refused::Said(first)
+            })
+        };
+        let (a, b) = (read(o, &op)?, read(n, &np)?);
+        if a == b {
+            continue;
+        }
+        let mut changes = Vec::new();
+        if a.data != b.data {
+            let range = |x: (i64, i64)| {
+                if made == Lang::Ja { format!("{} から {}", ritsu_ports::day_text(x.0), ritsu_ports::day_text(x.1)) } else { format!("{} to {}", ritsu_ports::day_text(x.0), ritsu_ports::day_text(x.1)) }
+            };
+            changes.push(Change { item: Some(if made == Lang::Ja { "データの範囲".into() } else { "The days the calendar knows".into() }), before: Some(range(a.data)), after: Some(range(b.data)) });
+        }
+        if a.offset != b.offset {
+            let off = |x: Option<i32>| x.map(|m| format!("{m:+}")).unwrap_or_else(|| "UTC".into());
+            changes.push(Change { item: Some(if made == Lang::Ja { "UTC との差".into() } else { "UTC offset".into() }), before: Some(off(a.offset)), after: Some(off(b.offset)) });
+        }
+        let opened: Vec<_> = a.closed.difference(&b.closed).collect();
+        let closed: Vec<_> = b.closed.difference(&a.closed).collect();
+        if !closed.is_empty() || !opened.is_empty() {
+            let days = |xs: Vec<&i64>| xs.into_iter().take(20).map(|d| ritsu_ports::day_text(*d)).collect::<Vec<_>>().join(", ");
+            let more_closed = closed.len().saturating_sub(20);
+            let more_opened = opened.len().saturating_sub(20);
+            changes.push(Change {
+                item: Some(if made == Lang::Ja { "休みの日".into() } else { "Closed days".into() }),
+                before: Some(if opened.is_empty() { String::new() } else { format!("{}{}", days(opened), if more_opened > 0 { format!(" +{more_opened}") } else { String::new() }) }),
+                after: Some(if closed.is_empty() { String::new() } else { format!("{}{}", days(closed), if more_closed > 0 { format!(" +{more_closed}") } else { String::new() }) }),
+            });
+        }
+        if changes.is_empty() {
+            changes.push(Change { item: None, before: None, after: Some(if made == Lang::Ja { "カレンダーが変わります".into() } else { "The calendar changes".into() }) });
+        }
+        out.push(Section {
+            id: format!("calendar-{}", ou.alias.as_ref().map(|a| a.ascii().to_string()).unwrap_or_else(|| ou.path.replace('/', "_"))),
+            title: if made == Lang::Ja { format!("カレンダー `{}`", ou.path) } else { format!("The calendar `{}`", ou.path) },
+            changes,
+        });
+    }
+    Ok(out)
 }
 
 /// The lowered route of a request, as a side of [`ritsu_ports::Rules::diff`] (read through the

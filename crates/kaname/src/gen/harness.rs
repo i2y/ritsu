@@ -706,6 +706,7 @@ pub fn json_entries(modules: &[Rc<Checked>], t: Target, name: &str, go_module: &
         // each argument, read off its JSON, or the integer as it is given
         let mut args = Vec::new();
         let mut read = Vec::new();
+        let mut scanned: Vec<(String, String)> = Vec::new();
         for prm in &info.params {
             let n = prm.name.ascii().to_string();
             if integer_param(&prm.slot.ty) {
@@ -719,6 +720,7 @@ pub fn json_entries(modules: &[Rc<Checked>], t: Target, name: &str, go_module: &
                 continue;
             }
             let wire = h.lit(&prm.name.text);
+            scanned.push((n.clone(), wire.clone()));
             let at = match t {
                 Target::TypeScript => format!("parse({n}, {wire})"),
                 Target::Python => format!("_parse({n}, {wire})"),
@@ -753,17 +755,23 @@ pub fn json_entries(modules: &[Rc<Checked>], t: Target, name: &str, go_module: &
         let (fun, module, line) = (h.lit(f), h.lit(&c.module.name.text), info.line);
         fns.push_str(&match t {
             Target::TypeScript => {
-                let reads = if read.is_empty() { String::new() } else { format!("  let a: any[];\n  try {{\n    a = [{}];\n  }} catch (e) {{\n    throw entered(e, {fun}, {module}, {line});\n  }}\n", read.join(", ")) };
+                let scan = scanned.iter().map(|(n, wire)| format!("[{n}, {wire}]")).collect::<Vec<_>>().join(", ");
+                let scan = if scan.is_empty() { scan } else { format!("    for (const part of [{scan}]) {{\n      if (deep(part[0])) throw new Wrong(part[1], \"\", \"\", 5);\n    }}\n") };
+                let reads = if read.is_empty() { String::new() } else { format!("  let a: any[];\n  try {{\n{scan}    a = [{}];\n  }} catch (e) {{\n    throw entered(e, {fun}, {module}, {line});\n  }}\n", read.join(", ")) };
                 format!("/** The function `{f}` of the module `{m}`, through JSON. */\nfunction {en}({}): string {{\n{reads}  const r = {call};\n  return show({out});\n}}\n\n", params.join(", "))
             }
             Target::Python => {
-                let reads = if read.is_empty() { String::new() } else { format!("    try:\n        a = [{}]\n    except _Wrong as w:\n        raise kaname.KanameError(\"input\", {module}, {line}, _said({fun}, w), w.path) from None\n", read.join(", ")) };
+                let scan = scanned.iter().map(|(n, wire)| format!("({n}, {wire})")).collect::<Vec<_>>().join(", ");
+                let scan = if scan.is_empty() { scan } else { format!("        _scan_deep(({scan},))\n") };
+                let reads = if read.is_empty() { String::new() } else { format!("    try:\n{scan}        a = [{}]\n    except _Wrong as w:\n        raise kaname.KanameError(\"input\", {module}, {line}, _said({fun}, w), w.path) from None\n", read.join(", ")) };
                 format!("def {en}({}) -> str:\n    \"\"\"The function `{f}` of the module `{m}`, through JSON.\"\"\"\n{reads}    r = {call}\n    return json.dumps({out}, ensure_ascii=False)\n\n\n", params.join(", "))
             }
             _ => {
+                let scan = scanned.iter().map(|(n, wire)| format!("{{{n}, {wire}}}")).collect::<Vec<_>>().join(", ");
+                let scan = if scan.is_empty() { scan } else { format!("for _, part := range []struct {{\n\t\traw json.RawMessage\n\t\tat  string\n\t}}{{{scan}}} {{\n\t\tif deepJSON(part.raw) {{\n\t\t\tpanic(wrongJSON{{path: part.at, kind: 5}})\n\t\t}}\n\t}}\n\t") };
                 let got = if fails { format!("r, err := {call}\n\tif err != nil {{\n\t\treturn nil, err\n\t}}\n") } else { format!("r := {call}\n") };
                 format!(
-                    "// {en} is the function `{f}` of the module `{m}`, through JSON. JSON that is no value of its\n// type, or a value out of the range it declares, is answered with an error.\nfunc {en}({}) (out json.RawMessage, err error) {{\n\tdefer func() {{\n\t\tif r := recover(); r != nil {{\n\t\t\tout = nil\n\t\t\terr = entryError(r, {fun}, {module}, {line})\n\t\t}}\n\t}}()\n\t{got}\treturn json.Marshal({out})\n}}\n\n",
+                    "// {en} is the function `{f}` of the module `{m}`, through JSON. JSON that is no value of its\n// type, or a value out of the range it declares, is answered with an error.\nfunc {en}({}) (out json.RawMessage, err error) {{\n\tdefer func() {{\n\t\tif r := recover(); r != nil {{\n\t\t\tout = nil\n\t\t\terr = entryError(r, {fun}, {module}, {line})\n\t\t}}\n\t}}()\n\t{scan}{got}\treturn json.Marshal({out})\n}}\n\n",
                     params.join(", ")
                 )
             }
@@ -2553,6 +2561,13 @@ def _deep(text: str) -> bool:
         elif c in ("]", "}") and depth > 0:
             depth -= 1
     return False
+
+
+def _scan_deep(parts: tuple[tuple[str, str], ...]) -> None:
+    # in a function of its own, so that the names it scans by overwrite no argument of the entry
+    for x, at in parts:
+        if _deep(x):
+            raise _Wrong(at, "", "", 5)
 
 
 "#;

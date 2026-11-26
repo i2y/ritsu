@@ -103,6 +103,7 @@ pub enum PathWhy {
     DotDot,
     Backslash,
     Nul,
+    Control,
     DotStart,
     AtStart,
     TooLong,
@@ -122,11 +123,13 @@ impl Error {
                     PathWhy::DotDot => tr!("`..` という要素があります", "it has a part `..`"),
                     PathWhy::Backslash => tr!("`\\` があります", "it has a `\\` in it"),
                     PathWhy::Nul => tr!("NUL があります", "it has a NUL in it"),
+                    PathWhy::Control => tr!("制御文字があります", "it has a control character in it"),
                     PathWhy::DotStart => tr!("`.` で始まる要素があります", "it has a part that starts with `.`"),
                     PathWhy::AtStart => tr!("最初の要素が `@` で始まります", "its first part starts with `@`"),
                     PathWhy::TooLong => tr!("{MAX_PATH} バイトを超えます", "it is longer than {MAX_PATH} bytes"),
                     PathWhy::TooDeep => tr!("要素が {MAX_PARTS} 個を超えます", "it has more than {MAX_PARTS} parts"),
                 };
+                let p = crate::text::escape_controls(&p);
                 tr!("モジュールのファイルのパス `{p}` は受け付けません。", "the path `{p}` of a module's file is refused: ").then(&w)
             }
             Error::Twice(p) => tr!("パス `{p}` が二度あります", "the path `{p}` is there twice"),
@@ -175,6 +178,9 @@ pub fn path_why(p: &str) -> Option<PathWhy> {
     }
     if p.contains('\0') {
         return Some(PathWhy::Nul);
+    }
+    if p.chars().any(char::is_control) {
+        return Some(PathWhy::Control);
     }
     if p.contains('\\') {
         return Some(PathWhy::Backslash);

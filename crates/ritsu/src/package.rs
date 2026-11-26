@@ -1521,9 +1521,12 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<Path
             if library && d.as_path() == dir && (name == "dist" || name == "build" || name.ends_with(".egg-info") || name == "go.sum") {
                 continue;
             }
-            if p.is_dir() {
+            // a symbolic link is no part of the package: it is not followed, and nothing through
+            // it is removed
+            let Ok(kind) = e.file_type() else { continue };
+            if kind.is_dir() {
                 todo.push(p);
-            } else if !planned.contains(&p) && generated_here(&p) {
+            } else if kind.is_file() && !planned.contains(&p) && generated_here(&p) {
                 out.push(p);
             }
         }
@@ -1533,16 +1536,17 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<Path
 }
 
 /// That no two files of the project write one file of the package of `target` (rulec's §15.334):
-/// one path, two paths that differ only in the case of their letters (one file where the file system
-/// does not tell upper from lower case), or, in Go, one directory, which is one package that would
-/// declare the names of both. A file the package writes for itself (an index, the manifest) is one
-/// of the two where a file of the project writes the same.
+/// one path, two paths that differ only in the case of their letters or in their Unicode
+/// normalization (one file where the file system does not tell them apart), or, in Go, one
+/// directory, which is one package that would declare the names of both. A file the package
+/// writes for itself (an index, the manifest) is one of the two where a file of the project writes
+/// the same.
 fn written_once(p: &Package, target: &str, lang: Lang) -> Result<(), Refusal> {
     // each path in lower case, and each directory of Go's, with the first file that writes it
     let mut by: BTreeMap<String, (&str, &Option<String>)> = BTreeMap::new();
     let mut dirs: BTreeMap<&str, (&str, &Option<String>)> = BTreeMap::new();
     for (rel, from) in p.files.iter().map(|(r, _, f)| (r, f)).chain(p.bytes.iter().map(|(r, _, f)| (r, f))) {
-        if let Some(prev) = by.insert(rel.to_lowercase(), (rel.as_str(), from)) {
+        if let Some(prev) = by.insert(ritsu_emit::normal::nfc(rel).to_lowercase(), (rel.as_str(), from)) {
             return Err(refusal(2, twice(target, prev, (rel.as_str(), from), None), lang));
         }
         if target != "go" || !rel.ends_with(".go") {
@@ -1593,8 +1597,8 @@ fn twice(target: &str, (p, a): (&str, &Option<String>), (q, b): (&str, &Option<S
             "`{a}` writes {at}, which the package writes for itself; give `{a}` another name ({NAMES_EN})"
         ),
         (Some(a), Some(b), false) => tr!(
-            "`{a}` の {at} と `{b}` の {other} は、大文字と小文字だけが違います。大文字と小文字を区別しないファイルシステムでは一つのファイルなので、どちらかの名前を変えてください（{NAMES_JA}）",
-            "`{a}` writes {at} and `{b}` writes {other} of the package, which differ only in the case of their letters and are one file where the file system does not tell upper from lower case; give one of them another name ({NAMES_EN})"
+            "`{a}` の {at} と `{b}` の {other} は、大文字と小文字か Unicode の正規化だけが違います。ファイルシステムがそれらを区別しないと一つのファイルなので、どちらかの名前を変えてください（{NAMES_JA}）",
+            "`{a}` writes {at} and `{b}` writes {other} of the package, which differ only in the case of their letters or in Unicode normalization and are one file where the file system does not tell them apart; give one of them another name ({NAMES_EN})"
         ),
         (Some(a), None, false) | (None, Some(a), false) => {
             // the project's file, and the package's own
@@ -1677,10 +1681,56 @@ fn generated_here(p: &Path) -> bool {
         || (p.file_name().is_some_and(|n| n == "package.json") && lines.get(3).and_then(|l| string(l, "description")).is_some_and(head))
 }
 
+/// The first symbolic link at or under `dir` on the way to `path`, including `path` itself; None
+/// where every part is a directory or a regular file. `dir` itself is resolved before the run, so
+/// the parts looked at here are strictly below it.
+fn link_below(dir: &Path, path: &Path) -> Option<PathBuf> {
+    let Ok(rel) = path.strip_prefix(dir) else { return None };
+    let mut at = dir.to_path_buf();
+    for part in rel.components() {
+        at.push(part.as_os_str());
+        if let Ok(m) = std::fs::symlink_metadata(&at)
+            && m.file_type().is_symlink()
+        {
+            return Some(at);
+        }
+    }
+    None
+}
+
+/// A temporary path beside `path`, unpredictable enough that a tree written before the run cannot
+/// have a link at it. The file is written there and then renamed over `path`, so `path` itself is
+/// never opened for writing.
+fn temp_beside(path: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static N: AtomicU32 = AtomicU32::new(0);
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+    let name = path.file_name().map(|x| x.to_string_lossy().into_owned()).unwrap_or_else(|| "out".into());
+    path.with_file_name(format!(".{name}.ritsu-tmp-{}-{}-{stamp}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+}
+
+/// Refuse a write through a link below the package's directory, naming the link.
+fn no_link_below(dir: &Path, path: &Path, lang: Lang) -> Result<(), Refusal> {
+    if let Some(link) = link_below(dir, path) {
+        let (shown, at) = (path.display().to_string(), link.display().to_string());
+        return Err(refusal(
+            2,
+            tr!("{shown} を書けません。{at} がリンクです。リンクを取り除くか、ほかの出力先にしてください", "cannot write {shown}: {at} is a symbolic link; remove it, or write somewhere else"),
+            lang,
+        ));
+    }
+    Ok(())
+}
+
 /// Write the package into `dir`, or under `check` say what differs from it. For `requests`,
 /// `extras` are the extras the run is given (`--extra`): the files an earlier run wrote for one it
 /// is not given are said, and left as they are ([`bundle::written_before`]).
 fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: bool, extras: &[&str], st: &mut Emitted, lang: Lang) -> Result<(), Refusal> {
+    // what an earlier run wrote for the extras is read before anything of this run is written:
+    // `bundle.json` written now names what this run lists, not what goes
+    let zip_before = dir.parent().map_or_else(|| PathBuf::from(bundle::ZIP), |d| d.join(bundle::ZIP));
+    let before = bundle::written_before(dir, &zip_before);
+    let listed_before = bundle::listed(&dir.join(bundle::ABOUT));
     let all: Vec<(&String, Option<&[u8]>, &Option<String>)> =
         p.files.iter().map(|(rel, body, from)| (rel, Some(body.as_bytes()), from)).chain(p.bytes.iter().map(|(rel, body, from)| (rel, body.as_deref(), from))).collect();
     let planned: BTreeSet<PathBuf> = all.iter().map(|(rel, _, _)| dir.join(rel)).collect();
@@ -1705,12 +1755,17 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
         let Some(body) = body else {
             return Err(refusal(2, tr!("{shown} の中身を作らずに書こうとしました。ritsu の不具合です。報告してください", "{shown} is written with nothing made for it: a bug in ritsu, please report it"), lang));
         };
-        if let Some(parent) = path.parent()
-            && let Err(e) = ritsu_base::fs::create_dir_all(parent)
-        {
-            return Err(refusal(2, ritsu_base::cli::cannot_create(&parent.display().to_string(), &e), lang));
+        no_link_below(dir, &path, lang)?;
+        if let Some(parent) = path.parent() {
+            no_link_below(dir, parent, lang)?;
+            if let Err(e) = ritsu_base::fs::create_dir_all(parent) {
+                return Err(refusal(2, ritsu_base::cli::cannot_create(&parent.display().to_string(), &e), lang));
+            }
         }
-        if let Err(e) = ritsu_base::fs::write(&path, body) {
+        let tmp = temp_beside(&path);
+        no_link_below(dir, &tmp, lang)?;
+        if let Err(e) = ritsu_base::fs::write(&tmp, body).and_then(|_| std::fs::rename(&tmp, &path)) {
+            let _ = std::fs::remove_file(&tmp);
             return Err(refusal(2, ritsu_base::cli::cannot_write(&shown, &e), lang));
         }
         st.note(target, &shown, from, "written");
@@ -1733,12 +1788,16 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
         // the files an extra wrote before: those of an extra the run is not given are said and left
         // as they are (DESIGN 9.6), as the Cedar of a target not given is; of one it is given, the
         // files `bundle.json` listed that the run does not write go, as a kind's vectors do
-        let zip = dir.parent().map_or_else(|| PathBuf::from(bundle::ZIP), |d| d.join(bundle::ZIP));
-        let before = bundle::written_before(dir, &zip);
+        let before = before.clone();
         let unasked: BTreeSet<&PathBuf> = before.iter().filter(|(x, _)| !extras.contains(x)).map(|(_, p)| p).collect();
         left.retain(|p| !unasked.contains(p));
         if extras.contains(&"bundle") {
-            left.extend(bundle::listed(&dir.join(bundle::ABOUT)).into_iter().map(|rel| dir.join(rel)).filter(|p| p.is_file() && !planned.contains(p)));
+            // a path the earlier bundle listed is inside `dir` as text, but a link below `dir`
+            // could still make removing it remove a file outside; refuse it as a write through one
+            for rel in &listed_before {
+                no_link_below(dir, &dir.join(rel), lang)?;
+            }
+            left.extend(listed_before.iter().cloned().map(|rel| dir.join(rel)).filter(|p| p.is_file() && !planned.contains(p)));
         }
         for p in unasked {
             let shown = p.display().to_string();
@@ -2000,7 +2059,8 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         print!("{}", table.help_cmd(cmd, lang));
         return 0;
     }
-    // the directory as the run holds a path a flag takes (DESIGN 4.15): `--out ./generated` is `generated`
+    // the directory as the run holds a path a flag takes (DESIGN 4.15): `--out ./generated` is `generated`.
+    // `--out` itself may be a link; nothing below it may be one (`no_link_below`).
     answer.out = ritsu_base::paths::fold_given(a.get("--out").unwrap_or("generated"));
     // `--library` (DESIGN 17.16): the whole module, named by its ritsu.mod
     let library = a.has("--library");
@@ -2792,5 +2852,114 @@ mod tests {
         }
         assert!(wrong.is_empty(), "the go lines are not those of the modules' go.mod:\n{}", wrong.join("\n"));
         println!("the go lines of {} Go modules are those of their go.mod", GO_MODULES.len() + GO_RAISED.len());
+    }
+}
+
+#[cfg(test)]
+mod output_tests {
+    use super::*;
+
+    /// Two files whose paths differ only in their Unicode normalization (`が` as one character, and
+    /// as `か` with the combining mark) are one file where the file system does not tell them apart.
+    /// No project of a macOS file system can hold the two, so the check is tested here.
+    #[test]
+    fn two_paths_that_differ_only_in_normalization_are_one_file() {
+        let p = Package {
+            files: vec![
+                ("requests/が.json".to_string(), String::new(), Some("a.ringi".to_string())),
+                ("requests/か\u{3099}.json".to_string(), String::new(), Some("b.ringi".to_string())),
+            ],
+            bytes: Vec::new(),
+            alone: false,
+        };
+        let Err(r) = written_once(&p, REQUESTS, Lang::En) else { panic!("the two paths are one file") };
+        assert!(r.message.contains("differ only in the case of their letters or in Unicode normalization"), "{}", r.message);
+        let Err(r) = written_once(&p, REQUESTS, Lang::Ja) else { panic!("the two paths are one file") };
+        assert!(r.message.contains("大文字と小文字か Unicode の正規化だけが違います"), "{}", r.message);
+    }
+
+    /// A file of ritsu's that no run plans any more is found below the package's directory, but not
+    /// through a symbolic link there: the link leads out, and nothing it leads to is removed.
+    #[cfg(unix)]
+    #[test]
+    fn the_leftovers_are_not_looked_for_through_a_link() {
+        let d = std::env::temp_dir().join(format!("ritsu-leftovers-link-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let (package, outside) = (d.join("typescript"), d.join("outside"));
+        std::fs::create_dir_all(package.join("rules")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let generated = "// Code generated by rulec 1.0.0. DO NOT EDIT.\n";
+        std::fs::write(package.join("rules").join("old.ts"), generated).unwrap();
+        std::fs::write(outside.join("other.ts"), generated).unwrap();
+        std::os::unix::fs::symlink(&outside, package.join("linked")).unwrap();
+        assert_eq!(leftovers(&package, &BTreeSet::new(), false), vec![package.join("rules").join("old.ts")]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_link_below_the_output_is_refused() {
+        let d = std::env::temp_dir().join(format!("ritsu-out-link-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("/tmp", d.join("requests")).unwrap();
+            assert_eq!(link_below(&d, &d.join("requests").join("x")), Some(d.join("requests")));
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_source_the_bundle_before_listed_and_this_one_does_not_is_removed() {
+        let d = std::env::temp_dir().join(format!("ritsu-bundle-stale-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let dir = d.join("requests");
+        let about = |name: &str| format!("{{\"sources\":[{{\"path\":\"source/{name}\",\"sha256\":\"x\"}}],\"diff\":null}}\n");
+        for (name, gone) in [("office.cal", false), ("holidays.cal", true)] {
+            let p = Package {
+                files: vec![(bundle::ABOUT.to_string(), about(name), None), (format!("source/{name}"), "calendar x v1\n".into(), None)],
+                bytes: Vec::new(),
+                alone: false,
+            };
+            let mut st = Emitted::default();
+            emit(&dir, REQUESTS, &p, false, false, &["bundle"], &mut st, Lang::En).unwrap_or_else(|e| panic!("{}", e.said));
+            if gone {
+                assert!(!dir.join("source/office.cal").is_file(), "the source the bundle before listed is still there");
+                assert!(st.removed.iter().any(|p| p.ends_with("source/office.cal")), "{:?}", st.removed);
+            }
+        }
+        assert!(dir.join("source/holidays.cal").is_file());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_a_source_the_bundle_before_listed_is_refused() {
+        let d = std::env::temp_dir().join(format!("ritsu-bundle-link-stale-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let dir = d.join("requests");
+        let about = |path: &str| format!("{{\"sources\":[{{\"path\":\"{path}\",\"sha256\":\"x\"}}],\"diff\":null}}\n");
+        let first = Package {
+            files: vec![(bundle::ABOUT.to_string(), about("source/old/office.cal"), None), ("source/old/office.cal".into(), "calendar x v1\n".into(), None)],
+            bytes: Vec::new(),
+            alone: false,
+        };
+        let mut st = Emitted::default();
+        emit(&dir, REQUESTS, &first, false, false, &["bundle"], &mut st, Lang::En).unwrap_or_else(|e| panic!("{}", e.said));
+        let outside = d.join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let kept = outside.join("office.cal");
+        std::fs::write(&kept, "keep\n").unwrap();
+        std::fs::remove_dir_all(dir.join("source/old")).unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join("source/old")).unwrap();
+        let second = Package {
+            files: vec![(bundle::ABOUT.to_string(), about("source/holidays.cal"), None), ("source/holidays.cal".into(), "calendar x v1\n".into(), None)],
+            bytes: Vec::new(),
+            alone: false,
+        };
+        let mut st = Emitted::default();
+        assert!(emit(&dir, REQUESTS, &second, false, false, &["bundle"], &mut st, Lang::En).is_err());
+        assert!(kept.is_file(), "the file outside the output was removed");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

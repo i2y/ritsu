@@ -487,9 +487,48 @@ pub fn taken_word(w: &str) -> bool {
     ritsu_emit::words::typescript::NAMES.contains(w) || ritsu_emit::words::python::KEYWORDS.contains(&w) || ritsu_emit::words::go::KEYWORDS.contains(&w)
 }
 
+/// The longest name ringi takes, in characters: long enough for the names people read, short
+/// enough for the files and modules the name begins.
+pub const LONGEST_NAME: usize = 64;
+
+/// Whether `c` is a bidirectional embedding, override or isolate control.
+fn bidi(c: char) -> bool {
+    matches!(c as u32, 0x202a..=0x202e | 0x2066..=0x2069)
+}
+
+/// The characters of `s` that would change how the text around them is read, as `\u{…}`.
+fn bidi_in(s: &str) -> Vec<String> {
+    let mut out: Vec<String> = s.chars().filter(|c| bidi(*c)).map(|c| format!("U+{:04X}", c as u32)).collect();
+    out.dedup();
+    out
+}
+
+/// E002 of a name or a label that holds a bidirectional embedding, override or isolate control.
+fn refused_text(s: &Scope, at: Span, what: &str, text: &str, out: &mut Vec<Diag>) {
+    let found = bidi_in(text);
+    if found.is_empty() {
+        return;
+    }
+    let list = found.join(", ");
+    out.push(s.err("E002", at, tr!(
+        "{what} に、文の向きを変える制御文字（{list}）があります。名前と文言には使えません",
+        "{what} holds a control that changes the direction of text ({list}), which a name or a label cannot hold"
+    )));
+}
+
 /// E002: a name that cannot be used.
 fn usable(s: &Scope, d: &Decl, field: bool, out: &mut Vec<Diag>) {
     let w = &d.text;
+    refused_text(s, d.span, "名前", w, out);
+    if let Some(a) = &d.alias {
+        refused_text(s, a.span, "ASCII の名前", &a.text, out);
+    }
+    let longest = w.chars().count().max(d.alias.as_ref().map_or(0, |a| a.text.chars().count()));
+    if longest > LONGEST_NAME {
+        let at = d.alias.as_ref().map(|x| x.span).unwrap_or(d.span);
+        out.push(s.err("E002", at, tr!("名前が {longest} 字あります。名前は {LONGEST_NAME} 字までです", "The name is {longest} characters long; a name is {LONGEST_NAME} characters at most")));
+        return;
+    }
     if kw::is_reserved(w) {
         out.push(s.err("E002", d.span, tr!("`{w}` は条件を書く語なので、名前にできません", "`{w}` is a word conditions are written with, and cannot be a name")).note(reserved_note()));
         return;
@@ -720,6 +759,42 @@ fn once(s: &Scope, decls: &[Decl], space: &Text, out: &mut Vec<Diag>) {
 /// E002 and E003 for every space of the file.
 pub fn declarations(s: &Scope, out: &mut Vec<Diag>) {
     let f = s.file;
+    // the texts a page shows: the file's title, the titles of the fields and of the values, the
+    // titles of positions, kinds of team and masters, and every entry of `labels`
+    if let Some(t) = &f.title {
+        refused_text(s, f.name.span, "題", t, out);
+    }
+    fn fields_texts(s: &Scope, fs: &[Field], out: &mut Vec<Diag>) {
+        for fd in fs {
+            if let Some(t) = &fd.title {
+                refused_text(s, fd.name.span, "フィールドの文言", t, out);
+            }
+            for t in fd.options.iter().chain(&fd.value_titles) {
+                if let Some(text) = &t.title {
+                    refused_text(s, t.name.span, "値の文言", text, out);
+                }
+            }
+            fields_texts(s, &fd.children, out);
+        }
+    }
+    fields_texts(s, &f.form, out);
+    fields_texts(s, &f.inputs, out);
+    for m in &f.masters {
+        if let Some(t) = &m.title {
+            refused_text(s, m.name.span, "マスタの文言", t, out);
+        }
+        fields_texts(s, &m.fields, out);
+    }
+    for t in f.positions.iter().chain(&f.team_kinds) {
+        if let Some(text) = &t.title {
+            refused_text(s, t.name.span, "名前の文言", text, out);
+        }
+    }
+    for l in &f.labels {
+        for e in &l.entries {
+            refused_text(s, e.span, "`labels` の文言", &e.text, out);
+        }
+    }
     let named = Decl::name(&f.name);
     let before = out.len();
     usable(s, &named, false, out);
@@ -1486,5 +1561,16 @@ fn label_ref(s: &Scope, e: &Label, out: &mut Vec<Diag>) {
                 out.push(nothing(tr!("`{n}` は `who` に宣言がありません", "`{n}` is not declared in `who`")));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bounds_tests {
+    #[test]
+    fn refuses_bidirectional_controls_and_long_names() {
+        assert!(super::bidi('\u{202e}'));
+        assert!(super::bidi('\u{2066}'));
+        assert!(!super::bidi('a'));
+        assert_eq!(super::LONGEST_NAME, 64);
     }
 }

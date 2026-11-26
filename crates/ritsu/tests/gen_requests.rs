@@ -110,10 +110,18 @@ fn picked<'a>(all: &'a [&'a str], fast: &'a [&'a str]) -> &'a [&'a str] {
 
 /// `ritsu`, run in `dir`, with no language asked of the environment.
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
+    ritsu_in_with(dir, args, &[])
+}
+
+/// `ritsu_in` with environment variables for the child (the build's temporary directory, say).
+fn ritsu_in_with(dir: &Path, args: &[&str], envs: &[(&str, &Path)]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
     for v in common::LANG_VARS {
         c.env_remove(v);
+    }
+    for (k, v) in envs {
+        c.env(k, v);
     }
     let o = c.output().expect("could not run ritsu");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
@@ -1195,6 +1203,77 @@ flow
   succeed ticket = moved.ticket.id, status = moved.ticket.status
 "#;
 
+/// SIGTERM of `ritsu` reaches cargo's own process group, so the build does not wait
+/// for the tool that would otherwise run on, and the scratch directory goes with the failed run.
+#[cfg(unix)]
+#[test]
+fn a_stopped_build_stops_cargo_and_cleans_its_scratch() {
+    if !wasm_ready() {
+        return;
+    }
+    let t = TempDir::new("gen-requests-wasm-kill");
+    lay(&t);
+    let scratch = here().parent().unwrap().parent().unwrap().join("target").join(format!("wasm-kill-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(&scratch).unwrap();
+    let fake = scratch.join("fake-cargo");
+    let log = scratch.join("cargo.pid");
+    std::fs::write(
+        &fake,
+        r#"#!/bin/sh
+if [ "$1" = "-V" ]; then echo 'cargo 1.0.0 (fake)'; exit 0; fi
+echo $$ > "$FAKE_CARGO_LOG"
+while true; do sleep 1; done
+"#,
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+    c.current_dir(t.path()).args([
+        "gen", "examples/leave.ringi", "--root", ".", "--out", "out", "--target", "requests", "--catalog", CATALOG, "--extra", "wasm",
+    ]);
+    for v in common::LANG_VARS {
+        c.env_remove(v);
+    }
+    c.env("TMPDIR", &scratch).env("CARGO", &fake).env("FAKE_CARGO_LOG", &log);
+    let mut child = c.spawn().expect("could not run ritsu");
+    let mut cargo_pid = None;
+    for _ in 0..300 {
+        if let Ok(text) = std::fs::read_to_string(&log)
+            && let Some(pid) = text.lines().next().and_then(|x| x.trim().parse::<i32>().ok())
+        {
+            cargo_pid = Some(pid);
+            break;
+        }
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let Some(cargo_pid) = cargo_pid else {
+        let _ = child.kill();
+        panic!("the build did not reach the fake cargo");
+    };
+    unsafe extern "C" { fn kill(pid: i32, sig: i32) -> i32; }
+    assert_eq!(unsafe { kill(child.id() as i32, 15) }, 0);
+    let mut finished = false;
+    for _ in 0..80 {
+        if child.try_wait().unwrap().is_some() {
+            finished = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    if !finished {
+        unsafe { kill(-cargo_pid, 15) };
+        let _ = child.kill();
+        panic!("ritsu still waited for cargo after SIGTERM");
+    }
+    assert!(!std::fs::read_dir(&scratch).unwrap().any(|e| e.unwrap().file_name().to_string_lossy().starts_with("ritsu-wasm-")), "a scratch directory was left under {}", scratch.display());
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
 /// The vectors `--target requests` wrote into `requests` of each kind, as calls of the list of the
 /// kinds of request (as [`answers_as_the_reference`] reads them from the reference).
 fn vector_calls(requests: &Path, kinds: &[&str]) -> Vec<Call> {
@@ -1248,8 +1327,18 @@ fn wasm_is_built_alike_held_by_check_and_refused_without_its_tools() {
         a.into_iter().map(String::from).collect()
     };
     let run = |args: &[String]| ritsu_in(t.path(), &args.iter().map(String::as_str).collect::<Vec<_>>());
-    let (code, stdout, err) = run(&args_of("out", &[]));
+    // the first build is made with its scratch directory under a tree that plants the two files a
+    // shared temporary directory could hold: a toolchain choice cargo cannot use because the build
+    // names its toolchain, and a configuration it cannot read because cargo runs from `/`
+    let scratch = here().parent().unwrap().parent().unwrap().join("target").join(format!("wasm-planted-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(scratch.join(".cargo")).unwrap();
+    std::fs::write(scratch.join("rust-toolchain.toml"), "[toolchain]\nchannel = \"1.99.1\"\n").unwrap();
+    std::fs::write(scratch.join(".cargo/config.toml"), "this is no TOML table\n").unwrap();
+    let (code, stdout, err) = ritsu_in_with(t.path(), &args_of("out", &[]).iter().map(String::as_str).collect::<Vec<_>>(), &[("TMPDIR", scratch.as_path())]);
     assert_eq!(code, 0, "{stdout}{err}");
+    assert!(!std::fs::read_dir(&scratch).unwrap().any(|e| e.unwrap().file_name().to_string_lossy().starts_with("ritsu-wasm-")), "a scratch directory was left under {}", scratch.display());
+    let _ = std::fs::remove_dir_all(&scratch);
     let req = t.path().join("out/requests");
     assert!(!t.path().join("out/rust").exists(), "--extra wasm wrote <out>/rust with no --target rust:\n{stdout}");
     let module = std::fs::read(req.join("kinds.wasm")).unwrap();

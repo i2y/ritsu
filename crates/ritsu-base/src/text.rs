@@ -204,6 +204,20 @@ pub fn ja_spacing(s: &str) -> String {
     out
 }
 
+/// `s` with every control character written as `\u{…}`, so that a name printed in a
+/// sentence cannot write to the terminal or take a line of its own.
+pub fn escape_controls(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        if c.is_control() {
+            out.push_str(&format!("\\u{{{:x}}}", c as u32));
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// `1,067` and `871,596`: a count as both languages print it.
 pub fn count(n: u64) -> String {
     let s = n.to_string();

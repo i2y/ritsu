@@ -45,7 +45,8 @@ pub fn go(s: &str) -> String {
 }
 
 /// Rust, in double quotes: `\\`, `\"`, `\n`, `\r`, `\t`, and `\u{NN}` for the other control
-/// characters and DEL (Rust reads no `\u00NN` of JSON's).
+/// characters and DEL (Rust reads no `\u00NN` of JSON's), and the bidirectional embedding,
+/// override and isolate controls, which rustc refuses in a literal.
 pub fn rust(s: &str) -> String {
     let mut o = String::from("\"");
     for c in s.chars() {
@@ -55,7 +56,7 @@ pub fn rust(s: &str) -> String {
             '\n' => o.push_str("\\n"),
             '\r' => o.push_str("\\r"),
             '\t' => o.push_str("\\t"),
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => o.push_str(&format!("\\u{{{:x}}}", c as u32)),
+            c if (c as u32) < 0x20 || c as u32 == 0x7f || matches!(c as u32, 0x202a..=0x202e | 0x2066..=0x2069) => o.push_str(&format!("\\u{{{:x}}}", c as u32)),
             c => o.push(c),
         }
     }
@@ -71,4 +72,13 @@ pub fn sql(s: &str) -> String {
 /// A name as SQL quotes it: `"在庫"`, a `"` written twice.
 pub fn sql_ident(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_bidirectional_controls_are_escaped_in_rust() {
+        let s = "a\u{202e}b\u{2066}c";
+        assert_eq!(super::rust(s), "\"a\\u{202e}b\\u{2066}c\"");
+    }
 }

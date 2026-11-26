@@ -91,6 +91,10 @@ Names are kept in four places: the fields of the form, the stages, the ways to c
 and a way `manager`); twice in one place is E003. An expression reads the fields, the aliases of the
 `use` lines, `requester` and `ticket`; a cell of a stage reads the ways of `who`.
 
+A name is at most 64 characters. Neither a name nor a label may hold a bidirectional embedding,
+override or isolate control (U+202A to U+202E, U+2066 to U+2069); ringi refuses one in both
+languages (E002).
+
 A name cannot be one of the seven words conditions are made of, `and` `or` `not` `is` `none`
 `true` `false` (E002). A field cannot be named `requester` or `ticket`, which an expression reads
 (`requester.id`, `requester.department`, `ticket.id`, `ticket.round`, `ticket.attempt`). A way to

@@ -1249,7 +1249,8 @@ fn gen_says_what_it_did_as_json() {
     let (code, v) = json(&[]);
     assert_eq!(code, 0);
     let keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
-    assert_eq!(keys, ["ritsu", "root", "ok", "check", "out", "targets", "files", "diagnostics", "error"], "the keys, in their order");
+    assert_eq!(keys, ["ritsu", "root", "ok", "check", "out", "targets", "extras", "files", "diagnostics", "error"], "the keys, in their order");
+    assert_eq!(v["extras"], serde_json::json!([]), "no `--extra`");
     assert_eq!((&v["ritsu"], &v["root"], &v["ok"], &v["check"], &v["out"]), (&serde_json::json!(env!("CARGO_PKG_VERSION")), &serde_json::json!("."), &serde_json::json!(true), &serde_json::json!(false), &serde_json::json!(o)));
     assert_eq!((&v["targets"], &v["diagnostics"], &v["error"]), (&serde_json::json!(["typescript"]), &serde_json::json!([]), &serde_json::Value::Null));
     let written = v["files"].as_array().unwrap();
@@ -1502,13 +1503,13 @@ fn two_files_that_write_one_place_of_a_package_are_refused() {
     assert_eq!(code, 2);
     assert_eq!(
         err,
-        format!("error: `rules/a.rule` writes typescript/rules/size_label.ts and `rules/b.rule` writes typescript/rules/Size_Label.ts of the package, which differ only in the case of their letters and are one file where the file system does not tell upper from lower case; give one of them another name {names}\n")
+        format!("error: `rules/a.rule` writes typescript/rules/size_label.ts and `rules/b.rule` writes typescript/rules/Size_Label.ts of the package, which differ only in the case of their letters or in Unicode normalization and are one file where the file system does not tell them apart; give one of them another name {names}\n")
     );
     let (code, _, err) = generate(&case, &out, &["--target", "typescript", "--lang", "ja"]);
     assert_eq!(code, 2);
     assert_eq!(
         err,
-        format!("エラー: `rules/a.rule` の typescript/rules/size_label.ts と `rules/b.rule` の typescript/rules/Size_Label.ts は、大文字と小文字だけが違います。大文字と小文字を区別しないファイルシステムでは一つのファイルなので、どちらかの名前を変えてください{names_ja}\n")
+        format!("エラー: `rules/a.rule` の typescript/rules/size_label.ts と `rules/b.rule` の typescript/rules/Size_Label.ts は、大文字と小文字か Unicode の正規化だけが違います。ファイルシステムがそれらを区別しないと一つのファイルなので、どちらかの名前を変えてください{names_ja}\n")
     );
     assert!(!out.exists());
     // the package's own file, and one that differs from it only in case

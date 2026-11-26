@@ -782,6 +782,31 @@ fn each_kind_of_file_says_how_its_change_reaches_the_tickets_in_progress() {
     }
 }
 
+/// A calendar the request counts its deadlines by is part of the diff: closing more days changes
+/// the answers while the request's own lines stay the same.
+#[test]
+fn a_change_of_a_calendar_is_part_of_the_diff() {
+    let v = Variant {
+        name: "leave_calendar_closed",
+        file: "examples/leave.ringi",
+        at: None,
+        edits: vec![("request leave v1", "request leave v2")],
+        data: Some(("examples/shared/office.cal", "closed every 12-29..01-03 \"New Year break\"", "closed every 12-29..01-03 \"New Year break\"\nclosed every 08-10..08-21 \"Summer break\"")),
+        probes: Vec::new(),
+        grid: None,
+        back: false,
+    };
+    let d = compared(&v, Lang::En);
+    assert!(d.differs());
+    let section = d.sections.iter().find(|s| s.id.starts_with("calendar-")).unwrap_or_else(|| panic!("no calendar section: {:?}", d.sections.iter().map(|s| &s.id).collect::<Vec<_>>()));
+    let text = diff::text(&d);
+    assert!(text.contains("calendar") && text.contains("Closed days"), "{text}");
+    assert!(section.changes.iter().any(|c| c.after.as_deref().is_some_and(|x| x.contains("08-10"))), "{text}");
+    let ja = compared(&v, Lang::Ja);
+    let page = diff::markdown(&ja);
+    assert!(page.contains("カレンダー") && page.contains("休みの日"), "{page}");
+}
+
 /// The JSON names a stage and its way by their ASCII names, with the names as written beside them
 /// (DESIGN 3.4, 16.2): a file written in Japanese, its row changed.
 #[test]

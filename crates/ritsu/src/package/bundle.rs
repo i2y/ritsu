@@ -69,11 +69,96 @@ pub fn sources(project: &Project, joined: &Joined, kinds: &[ritsu_project::reque
             ));
         }
         let at = ritsu_base::paths::absolute(&project.root.join(&rel));
+        if !inside_root(&project.root, &at) {
+            return Err(refusal(
+                2,
+                tr!(
+                    "申請の種類が `{rel}` を読みますが、バンドルにはルートの下のファイルしか入りません。`--root` を、読むファイルが全部その下に来るディレクトリにしてください",
+                    "a kind of request reads `{rel}`, and a bundle holds only files under the root: give a `--root` that every file it reads is under"
+                ),
+                said,
+            ));
+        }
         let bytes = ritsu_base::fs::read(&at).map_err(|e| refusal(2, ritsu_base::cli::cannot_read(&rel, &e), said))?;
         out.push((format!("{SOURCE}/{rel}"), bytes));
     }
     out.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
     Ok(out)
+}
+
+/// Whether `file` opens as a regular file under `root`, with every symbolic link followed. A link
+/// inside the root may lead elsewhere inside it; one that leaves it may not.
+fn inside_root(root: &Path, file: &Path) -> bool {
+    let (Ok(root), Ok(file)) = (std::fs::canonicalize(root), std::fs::canonicalize(file)) else { return false };
+    file.starts_with(&root) && std::fs::metadata(&file).is_ok_and(|m| m.is_file())
+}
+
+/// Files read for the old side of a comparison: the files of the bundle laid over the disk, with
+/// nothing outside the project's root read through them. The data of the organization and of the
+/// masters is the current project's, under the root, as it is meant to be.
+struct Guarded {
+    inner: std::rc::Rc<dyn ritsu_base::fs::Files>,
+    root: PathBuf,
+    real_root: PathBuf,
+    laid: BTreeSet<PathBuf>,
+    lang: Lang,
+}
+
+impl Guarded {
+    fn folded(&self, p: &Path) -> PathBuf {
+        let p = if ritsu_base::paths::rooted(p) { p.to_path_buf() } else { self.inner.current_dir().unwrap_or_default().join(p) };
+        ritsu_base::paths::absolute(&p)
+    }
+
+    fn check(&self, p: &Path) -> std::io::Result<PathBuf> {
+        let abs = self.folded(p);
+        if self.laid.contains(&abs) {
+            return Ok(abs);
+        }
+        let outside = || {
+            let text = match self.lang {
+                Lang::Ja => "パスがバンドルのルートの外に出ます",
+                Lang::En => "the path goes outside the bundle's root",
+            };
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, text)
+        };
+        if !abs.starts_with(&self.root) {
+            return Err(outside());
+        }
+        if let Ok(real) = std::fs::canonicalize(&abs)
+            && !real.starts_with(&self.real_root)
+        {
+            return Err(outside());
+        }
+        Ok(abs)
+    }
+}
+
+impl ritsu_base::fs::Files for Guarded {
+    fn read(&self, p: &Path) -> std::io::Result<Vec<u8>> {
+        self.check(p).and_then(|_| self.inner.read(p))
+    }
+    fn metadata(&self, p: &Path) -> std::io::Result<ritsu_base::fs::Meta> {
+        self.check(p).and_then(|_| self.inner.metadata(p))
+    }
+    fn read_dir(&self, p: &Path) -> std::io::Result<Vec<(std::ffi::OsString, ritsu_base::fs::Kind)>> {
+        self.check(p).and_then(|_| self.inner.read_dir(p))
+    }
+    fn write(&self, p: &Path, bytes: &[u8]) -> std::io::Result<()> {
+        self.inner.write(p, bytes)
+    }
+    fn create_dir_all(&self, p: &Path) -> std::io::Result<()> {
+        self.inner.create_dir_all(p)
+    }
+    fn current_dir(&self) -> std::io::Result<PathBuf> {
+        self.inner.current_dir()
+    }
+    fn canonicalize(&self, p: &Path) -> std::io::Result<PathBuf> {
+        self.check(p).and_then(|_| self.inner.canonicalize(p))
+    }
+    fn link(&self, p: &Path) -> Option<PathBuf> {
+        self.inner.link(p)
+    }
 }
 
 /// The bundle a run compares with (`--diff-from`): its files by their paths, and the digest of its
@@ -95,10 +180,22 @@ pub fn base(path: &str, said: Lang) -> Result<Base, Refusal> {
             let rd = std::fs::read_dir(&d).map_err(|e| refusal(2, ritsu_base::cli::cannot_read(&d.display().to_string(), &e), said))?;
             for e in rd.flatten() {
                 let q = e.path();
-                if q.is_dir() {
+                let meta = std::fs::symlink_metadata(&q).map_err(|e| refusal(2, ritsu_base::cli::cannot_read(&q.display().to_string(), &e), said))?;
+                if meta.is_dir() {
                     todo.push(q);
                 } else if let Ok(rel) = q.strip_prefix(p) {
                     let rel = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/");
+                    if let Some(why) = ritsu_base::modules::tar::path_why(&rel) {
+                        return Err(not(super::zip::path_error(&rel, why)));
+                    }
+                    if !meta.is_file() {
+                        return Err(not(tr!("`{rel}` はふつうのファイルではありません", "`{rel}` is not a regular file")));
+                    }
+                    let size = meta.len();
+                    let total = files.values().map(|b: &Vec<u8>| b.len() as u64).sum::<u64>() + size;
+                    if total > super::zip::MAX {
+                        return Err(not(tr!("ファイルの合計が {} バイトを超えます", "its files are more than {} bytes", super::zip::MAX; super::zip::MAX)));
+                    }
                     let bytes = std::fs::read(&q).map_err(|e| refusal(2, ritsu_base::cli::cannot_read(&q.display().to_string(), &e), said))?;
                     files.insert(rel, bytes);
                 }
@@ -154,12 +251,17 @@ pub fn compare(base: &Base, project: &Project, kinds: &[ritsu_project::requests:
             continue;
         }
         let mut laid = ritsu_base::fs::Overlay::new(None);
+        let mut laid_paths = BTreeSet::new();
         for (p, bytes) in &base.files {
             if let Some(rel) = p.strip_prefix(&prefix) {
-                laid.put(&root.join(rel), bytes.clone());
+                let at = ritsu_base::paths::absolute(&root.join(rel));
+                laid.put(&at, bytes.clone());
+                laid_paths.insert(at);
             }
         }
-        let files: std::rc::Rc<dyn ritsu_base::fs::Files> = std::rc::Rc::new(laid);
+        let inner: std::rc::Rc<dyn ritsu_base::fs::Files> = std::rc::Rc::new(laid);
+        let real_root = std::fs::canonicalize(&root).unwrap_or_else(|_| root.clone());
+        let files: std::rc::Rc<dyn ritsu_base::fs::Files> = std::rc::Rc::new(Guarded { inner, root: root.clone(), real_root, laid: laid_paths, lang: said });
         let old_side = ringi::diff::Side { read: root.join(file).to_string_lossy().into_owned(), files: Some(files), shown: file.to_string() };
         let new_side = ringi::diff::Side { read: ritsu_base::paths::absolute(&project.root.join(&k.request.rel)).to_string_lossy().into_owned(), files: None, shown: k.request.rel.clone() };
         let mut pages = Vec::new();
@@ -274,4 +376,70 @@ pub fn listed(about: &Path) -> Vec<String> {
     out.sort();
     out.dedup();
     out
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    #[test]
+    fn a_directory_bundle_refuses_links_and_special_files() {
+        let d = std::env::temp_dir().join(format!("ritsu-bundle-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("source")).unwrap();
+        std::fs::write(d.join("wasm.json"), "{}").unwrap();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("/etc/passwd", d.join("source").join("x.ringi")).unwrap();
+            assert!(base(d.to_str().unwrap(), Lang::En).is_err());
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_directory_bundle_refuses_more_than_the_zips_size() {
+        let d = std::env::temp_dir().join(format!("ritsu-bundle-big-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("source")).unwrap();
+        std::fs::write(d.join("wasm.json"), "{}").unwrap();
+        let f = std::fs::File::create(d.join("source").join("big.ringi")).unwrap();
+        f.set_len(super::super::zip::MAX + 1).unwrap();
+        assert!(base(d.to_str().unwrap(), Lang::En).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_source_linked_outside_the_root_is_not_inside_it() {
+        let d = std::env::temp_dir().join(format!("ritsu-source-link-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let root = d.join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        let outside = d.join("outside.cal");
+        std::fs::write(&outside, "calendar x v1\n").unwrap();
+        let link = root.join("office.cal");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(!inside_root(&root, &link));
+        std::fs::write(root.join("inside.cal"), "calendar x v1\n").unwrap();
+        assert!(inside_root(&root, &root.join("inside.cal")));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_old_side_cannot_read_outside_the_root() {
+        let d = std::env::temp_dir().join(format!("ritsu-guarded-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let root = d.join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        let outside = d.join("outside.cal");
+        std::fs::write(&outside, "calendar x v1\n").unwrap();
+        let inner: std::rc::Rc<dyn ritsu_base::fs::Files> = std::rc::Rc::new(ritsu_base::fs::Disk);
+        let g = Guarded { inner, root: root.clone(), real_root: std::fs::canonicalize(&root).unwrap(), laid: BTreeSet::new(), lang: Lang::En };
+        assert!(g.check(&root.join("..").join("outside.cal")).is_err());
+        let link = root.join("linked.cal");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(g.check(&link).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
