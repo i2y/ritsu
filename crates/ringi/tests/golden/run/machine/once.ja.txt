@@ -20,6 +20,12 @@
 2026-11-16 12:00  approve            e3101  -> decide（e0101）、期限は 2026-11-19 の終わり
 シナリオ `not_across_an_agent`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: late 2026-11-20 00:00（decide）
 
+2026-11-16 10:00  submit                             e1101  -> first（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 11:00  approve                            e3101  -> middle（flow precheck_agent）、期限は 2026-11-19 の終わり; flow precheck_agent に頼んだ
+2026-11-16 11:01  agent answered doubt "No receipt"         -> middle（e3101）、期限は 2026-11-19 の終わり
+2026-11-16 12:00  approve                            e3101  -> decide（e0101）、期限は 2026-11-19 の終わり; second は middle の承認で済んだ（e3101）
+シナリオ `done_after_an_agent_doubts`: 書いたとおり（4 行）。チケットは `in progress` のままです。置いてある時計: late 2026-11-20 00:00（decide）
+
 2026-11-16 10:00  submit   e3101  -> first（e0101）、期限は 2026-11-19 の終わり
 2026-11-16 11:00  approve  e0101  -> approved; second を e0101 へ上げた（it comes to the requester alone）; second は first の承認で済んだ（e0101）; decide は first の承認で済んだ（e0101）
 シナリオ `done_where_it_went_up_to_for_lack_of_an_approver`: 書いたとおり（2 行）

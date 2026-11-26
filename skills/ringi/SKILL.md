@@ -465,7 +465,7 @@ examples/expense.ringi on 2026-11-16, in the organization from 2026-04-01
 requester e1201 (Sales staff 1)
   precheck  check (manager when the agent doubts): e1101 (Manager of Section 1A)
             due 2026-11-19 at the end of the day, reminder on 2026-11-18 09:00
-  first     manager: e1101 (Manager of Section 1A)
+  first     manager: e1101 (Manager of Section 1A); when the agent doubts, done with the approval of `precheck` (`same approver approves once`)
             due 3 business days after it starts, at the end of the day
   decide    dept_head: e3101 (Head of Sales Department 1)
             due 3 business days after it starts, at the end of the day

@@ -1319,9 +1319,9 @@ fn at_stage(did: string, st: Stage, org: Org, to: list[string], note: string) ->
   hist(r: Rec { ..rec_of(did: did), stage: st.name, organization: org.version, to: to, note: note })
 
 fn part_of(spec: Spec, who: Who, vals: list[Arg], o: Occ, st: Stage, way: string, q: Quorum?, org: Org, ask: bool) -> Parted total
-  description "One part of a stage as it starts: who answers the way, or what the stage's `when empty` does with nobody, with its line of the history; an agent's way asks its flow when `ask`"
+  description "One part of a stage as it starts: who answers the way, or what the stage's `when empty` does with nobody, with its line of the history; an agent's way asks its flow when `ask`, and else the way after `else` answers it, one person's alone as `same approver approves once` reads it"
   let flow = agent_flow(spec: spec, way: way)
-  let alone = not present(v: flow) and not is_chosen(spec: spec, way: way)
+  let alone = not is_chosen(spec: spec, way: way)
   let p = Part { way: way, key: way, approvers: [], team: none, needed: 1, answers: [], state: PartState.active, of: none, sole: Sole.other }
   let asked =
     match flow
@@ -1585,7 +1585,7 @@ record Decided
   made  : list[What]
 
 fn decide(cx: Cx, who: Who, stages: list[Stage], vals: list[Arg], pl: Place, i: number range >=0 <=1_000_000, ahead: list[string], here: list[string]) -> result[Decided?, Refusal] total
-  description "A part that waits for a later stage, as the ticket comes to the stage `i`: none while that stage is still one to wait for; else it is decided again, and waits on for the last stage ahead the one who answers it now alone answers, or starts"
+  description "A part that waits for a later stage, as the ticket comes to the stage `i`: none while that stage is still one to wait for; else it is decided again, and waits on for the last stage ahead the one who answers it now alone answers, or starts. An agent's part waits only once its agent has doubted: the way after `else` answers it, and the agent is not asked again"
   match stages.at(pl.stage)
     none => ok(none)
     some sa =>
@@ -1612,7 +1612,7 @@ fn decide(cx: Cx, who: Who, stages: list[Stage], vals: list[Arg], pl: Place, i: 
                   match o.ways.contains(pa.way)
                     false => err(refusal(kind: Kind.unread, en: concat("the stage `", sa.name, "` has no way `", pa.way, "`"), ja: concat("ステップ `", sa.name, "` の決め方 `", pa.way, "` がありません")))
                     true =>
-                      let np = part_of(spec: cx.spec, who: who, vals: vals, o: o, st: sa, way: pa.way, q: quorum_of(o: o), org: cx.org, ask: true)
+                      let np = part_of(spec: cx.spec, who: who, vals: vals, o: o, st: sa, way: pa.way, q: quorum_of(o: o), org: cx.org, ask: false)
                       let later =
                         match alone_by(p: np.part)
                           none => none
@@ -2958,7 +2958,7 @@ fn moved(x: indexed[Part], moves: list[Move]) -> Part total
         match m.people.first()
           none => Sole.other
           some a =>
-            match m.people.count() = 1 and n = 1 and p.state != PartState.agent
+            match m.people.count() = 1 and n = 1
               true => Sole.by { person: a }
               false => Sole.other
       let key =
@@ -3053,7 +3053,7 @@ fn doubted[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, o:
   match o.ways.at(x.index)
     none => err(refusal(kind: Kind.unread, en: concat("the stage `", st.name, "` has no such way"), ja: concat("ステップ `", st.name, "` の決め方がありません")))
     some way =>
-      let np = part_of(spec: cx.spec, who: who_of(t: s1.t), vals: s1.vals, o: o, st: st, way: way, q: quorum_of(o: o), org: cx.org, ask: false)
+      let np = after_doubt(cx: cx, s: s1, i: i, st: st, np: part_of(spec: cx.spec, who: who_of(t: s1.t), vals: s1.vals, o: o, st: st, way: way, q: quorum_of(o: o), org: cx.org, ask: false))
       let s2 = put_all(s: Step { ..s1, t: with_stage(t: s1.t, i: i, st: Stage { ..st, parts: replace_part(ps: st.parts, k: max(min(x.index, 1_000_000), 0), p: np.part) }) }, made: np.made)
       let to =
         match np.part.state = PartState.active
@@ -3063,6 +3063,14 @@ fn doubted[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, o:
       match np.part.state = PartState.stopped
         true => ok(put(s: s3, what: What.notify { to: [], notice: Notice.stopped, stage: st.name }))
         false => ok(s3)
+
+fn after_doubt[F](cx: Cx, s: Step[F], i: number range >=0 <=1_000_000, st: Stage, np: Parted) -> Parted total
+  description "`same approver approves once, at the last stage`: the part the way after `else` answers once the agent doubts waits for the last stage ahead its one person alone answers, as a part does when its stage starts; not at a stage the ticket was sent back to"
+  match cx.spec.once = Once.last and not st.again
+    false => np
+    true =>
+      let d = defer_own(cx: cx, who: who_of(t: s.t), stages: s.t.stages, vals: s.vals, i: i, st: st, p: np.part)
+      Parted { part: d.part, made: np.made.concat(d.made) }
 
 fn do_agent[F](cx: Cx, s: Step[F], yes: bool, reason: string, failed: bool, clocks: (string, number, number, number) -> result[Clocks, Refusal] total, open_after: (string, date, number) -> result[date, Refusal] total, on: (Ending, Ref, Org) -> list[OnLine] total) -> result[Step[F], Refusal] total
   description "An agent's flow answered `ok`, or a doubt, with its reason, or failed, which is a doubt; a summary's flow that failed leaves the ticket to go on without it. A flow answers when it is done, so a paused ticket takes its answer too. The history names the flow in its note, and keeps the reason as its comment"

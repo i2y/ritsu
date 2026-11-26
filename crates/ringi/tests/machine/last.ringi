@@ -138,15 +138,15 @@ scenario past_an_agent
 | 2026-11-16 10:01 | agent answered(verdict: ok) |       | second   | in progress |
 | 2026-11-16 12:00 | approve                     | e3101 | decide   | in progress |
 
-# the agent doubts: the manager answers its stage, and the later one too
+# the agent doubts: its stage comes to the manager, who answers the later one too, so it waits for
+# that one, as the first stage does, and the manager answers once, seeing the doubt there
 scenario the_agent_doubts
   requester e1101
   form what = "A projector", shape = agent
 | at               | event                                                 | by    | -> stage | status      |
 | 2026-11-16 10:00 | submit                                                | e1101 | middle   | in progress |
-| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "No receipt")  |       | middle   | in progress |
-| 2026-11-16 11:00 | approve                                               | e3101 | second   | in progress |
-| 2026-11-16 12:00 | approve                                               | e3101 | decide   | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "No receipt")  |       | second   | in progress |
+| 2026-11-16 11:00 | approve                                               | e3101 | decide   | in progress |
 
 # rejected at the later stage: the ticket ends, the first stage never answered
 scenario rejected_at_the_later_stage

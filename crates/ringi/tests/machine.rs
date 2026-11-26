@@ -1570,8 +1570,9 @@ fn compared(file: &str) -> Compared {
                             }
                         }
                     }
-                    // done with an earlier approval: the same stages, with the same one
-                    let mut want: Vec<(String, String)> = sim.stages.iter().flat_map(|s| s.ways.iter().filter_map(|x| Some((s.stage.clone(), x.once_with.clone()?)))).collect();
+                    // done with an earlier approval: the same stages, with the same one (the walk's
+                    // agents agree, and what `simulate` says of a doubt is not walked)
+                    let mut want: Vec<(String, String)> = sim.stages.iter().flat_map(|s| s.ways.iter().filter(|x| !x.once_if_doubted).filter_map(|x| Some((s.stage.clone(), x.once_with.clone()?)))).collect();
                     let mut got = w.once.clone();
                     (want.sort(), want.dedup(), got.sort(), got.dedup());
                     assert_eq!(got, want, "{ctx}: the stages done with an earlier approval");
@@ -2286,6 +2287,9 @@ fn same_approver_approves_once() {
     assert_eq!(done("one_part_of_a_joint_stage"), ["middle with first (e3101)"]);
     // an agent answers between them
     assert_eq!(done("not_across_an_agent"), [] as [&str; 0]);
+    // the agent doubts: the one after `else` answers its stage, not done with their approval
+    // before it, and the stage after it is done with that approval
+    assert_eq!(done("done_after_an_agent_doubts"), ["second with middle (e3101)"]);
     // gone up for lack of an approver: the one it went up to answers the stages after it once
     assert_eq!(done("done_where_it_went_up_to_for_lack_of_an_approver"), ["second with first (e0101)", "decide with first (e0101)"]);
     // gone up for being late: the stage waits for the one it went up to
@@ -2487,17 +2491,29 @@ fn two_ways_of_a_stage_wait_for_two_stages() {
     });
 }
 
-/// An agent's stage is answered by the agent each time, and by the one after `else` when it
-/// doubts: it waits for no stage, and no stage waits for it.
+/// An agent's stage is answered by the agent first, so no stage waits for it, and it waits for
+/// none as it starts. When the agent doubts, the one after `else` answers it, and their part waits
+/// for the last stage ahead they alone answer, as a part does when its stage starts: they answer
+/// once, seeing the doubt there.
 #[test]
-fn an_agent_neither_waits_nor_is_waited_for() {
+fn an_agent_is_waited_for_by_no_stage_and_waits_once_it_doubts() {
     // `first` waits for `second`, past the agent's stage
     assert_eq!(put_off("last", "past_an_agent"), ["0: deferred first with second (e3101)", "2: approved first with second (e3101)"]);
-    // the agent doubts: the manager answers its stage there, and `second` after it
-    assert_eq!(put_off("last", "the_agent_doubts"), ["0: deferred first with second (e3101)", "3: approved first with second (e3101)"]);
+    // the agent doubts: its stage comes to the manager, who answers `second` too, so it waits for
+    // `second` with `first`, and the manager's one approval there does both
+    assert_eq!(put_off("last", "the_agent_doubts"), ["0: deferred first with second (e3101)", "1: deferred middle with second (e3101)", "2: approved first with second (e3101)", "2: approved middle with second (e3101)"]);
     let doubt = rows("last", "the_agent_doubts");
-    assert_eq!(doubt[2], "approve by e3101: in progress at middle -> in progress at second | record(approved) cancel(remind) cancel(late) notify(waiting: e3101) set(remind) set(late)");
-    assert_eq!(doubt[3], "approve by e3101: in progress at second -> in progress at decide | record(approved) record(approved) cancel(remind) cancel(late) notify(waiting: e0101) set(remind) set(late)");
+    assert_eq!(doubt[1], "agent answered: in progress at middle -> in progress at second | record(agent doubt) record(deferred) cancel(remind) cancel(late) notify(waiting: e3101) set(remind) set(late)");
+    assert_eq!(doubt[2], "approve by e3101: in progress at second -> in progress at decide | record(approved) record(approved) record(approved) cancel(remind) cancel(late) notify(waiting: e0101) set(remind) set(late)");
+    with(&machine_file("last"), |m, org| {
+        use ringi::engine::PartState;
+        let r = ran(m, org, "the_agent_doubts");
+        // the agent's stage waited, having started; done with the approval of `second`
+        assert_eq!(phases(r.rows[1].ticket().unwrap()), "first deferred, middle deferred, second open, decide ahead");
+        let t = r.rows[2].ticket().unwrap();
+        assert_eq!(phases(t), "first once, middle answered, second answered, decide open");
+        assert_eq!(t.stages[1].parts[0].state, PartState::Once("second".into()));
+    });
 }
 
 /// in progress -- the later stage has every approval it needs, and none in the seat of the one a

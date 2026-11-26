@@ -175,9 +175,11 @@ impl<'s, 'a> Machine<'s, 'a> {
             fx.record(t.round, rec("agent asked", Vec::new(), flow.clone()));
             return p;
         }
-        // one person alone answers it, as `same approver approves once` reads it: not an agent's
-        // way, nor a person chosen for the stage
-        let sole_of = |ps: &[String], needed: usize| if ps.len() == 1 && needed == 1 && agent.is_none() && !chosen { Sole::By(ps[0].clone()) } else { Sole::Other };
+        // one person alone answers it, as `same approver approves once` reads it: not a person
+        // chosen for the stage. An agent's way that comes here is not asked (above): its agent has
+        // doubted, or its flow failed, and the one the way after `else` comes to answers in its
+        // place, after the agent's answer (DESIGN 5.12)
+        let sole_of = |ps: &[String], needed: usize| if ps.len() == 1 && needed == 1 && !chosen { Sole::By(ps[0].clone()) } else { Sole::Other };
         match self.solve(sv, f, way, t, part) {
             Solved::People(ps, team) => {
                 p.needed = q.map_or(1, |q| listing::needed(q, ps.len()));
@@ -323,7 +325,7 @@ impl<'s, 'a> Machine<'s, 'a> {
 
     /// The last stage at or after `from` that `x` alone answers a part of, as the stages would start
     /// now: the one a part of an earlier stage that `x` alone answers waits for.
-    fn last_of(&self, sv: &Solver, t: &Ticket, from: usize, x: &str, part: &OrgPart) -> Option<usize> {
+    pub(crate) fn last_of(&self, sv: &Solver, t: &Ticket, from: usize, x: &str, part: &OrgPart) -> Option<usize> {
         (from..t.stages.len()).rev().find(|k| self.alone_at(sv, t, *k, part).iter().any(|p| p == x))
     }
 
@@ -386,7 +388,9 @@ impl<'s, 'a> Machine<'s, 'a> {
                     return Err(Refusal::new("unread", tr!("ステップ `{name}` の決め方 `{way}` がありません", "the stage `{name}` has no way `{way}`")));
                 };
                 let mut made = Effects::default();
-                let np = self.part_of(sv, o, st, &way, q, f, t, part, true, &mut made);
+                // an agent's part waits only once its agent has doubted (or its flow failed): the
+                // way after `else` answers it, and the agent is not asked again
+                let np = self.part_of(sv, o, st, &way, q, f, t, part, false, &mut made);
                 let later = match (&np.state, &np.sole) {
                     (PartState::Open, Sole::By(y)) => self.last_of(sv, t, i, y, part).map(|k2| (y.clone(), t.stages[k2].name.clone())),
                     _ => None,

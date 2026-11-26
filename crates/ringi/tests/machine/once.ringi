@@ -84,6 +84,18 @@ scenario not_across_an_agent
 | 2026-11-16 11:01 | agent answered(verdict: ok) |       | second   | in progress |
 | 2026-11-16 12:00 | approve                     | e3101 | decide   | in progress |
 
+# the agent doubts: its stage comes to the manager, who answers it again, seeing the doubt (the
+# approval of the stage before does not do it); the stage right after it, which comes to them too,
+# is done with that approval
+scenario done_after_an_agent_doubts
+  requester e1101
+  form what = "A projector", shape = agent
+| at               | event                                                | by    | -> stage | status      |
+| 2026-11-16 10:00 | submit                                               | e1101 | first    | in progress |
+| 2026-11-16 11:00 | approve                                              | e3101 | middle   | in progress |
+| 2026-11-16 11:01 | agent answered(verdict: doubt, reason: "No receipt") |       | middle   | in progress |
+| 2026-11-16 12:00 | approve                                              | e3101 | decide   | in progress |
+
 # the head of a department asks: the stage that comes to them alone goes up to the head of the
 # division, who has approved the stage before, and decides too: one approval does all three
 scenario done_where_it_went_up_to_for_lack_of_an_approver

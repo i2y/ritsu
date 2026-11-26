@@ -892,10 +892,13 @@ const LAST: &str = "  same approver  approves once, at the last stage\n";
 
 /// `same approver approves once, at the last stage` (DESIGN 5.12): a stage one person alone answers
 /// waits for the last later stage the same person alone answers, whatever comes between them, and
-/// W506 does not say the two; a way of a stage of several ways waits by itself. An agent's stage
-/// is answered where it is, and W506 says the two with why. Where only `same approver approves
-/// once` is written and does not do the later stage, or neither is, W506 says how the two are
-/// answered once: the earlier stage waits for the later.
+/// W506 does not say the two; a way of a stage of several ways waits by itself. A later stage an
+/// agent answers first is answered where it is, and W506 says the two with why. An earlier one is
+/// the one person's after `else`, who answers it when the agent doubts: it waits then, and with
+/// `same approver approves once` the later stage is done with that approval, so W506 does not say
+/// the two; with neither written, it says how to write it. Where only `same approver approves once`
+/// is written and does not do the later stage, or neither is, W506 says how the two are answered
+/// once: the earlier stage waits for the later.
 #[test]
 fn the_same_approver_approves_once_at_the_last_stage() {
     const BETWEEN: &str = "  first   manager\n  check   finance\n  second  head\n";
@@ -908,6 +911,16 @@ fn the_same_approver_approves_once_at_the_last_stage() {
             "use flow precheck_agent from \"precheck.flow\"\n",
             "  first   manager\n  second  check\n",
             &format!("{MANAGER_HEAD_WHO}  check   = agent precheck_agent, else head\n"),
+            ticket,
+        )
+    };
+    // the agent answers the earlier stage first, and the manager when it doubts
+    let agent_first = |ticket: &str| {
+        once_request(
+            "  category : choice \"Category\"\n    travel   \"Travel\"\n    expense  \"Expense\"\n    purchase \"Purchase\"\n  amount   : money[JPY] \"Amount\"  range >=1JPY <=10_000_000JPY\n  purpose  : text \"Purpose\"  count >=1 <=100\n",
+            "use flow precheck_agent from \"precheck.flow\"\n",
+            "  first   check\n  second  head\n",
+            &format!("{MANAGER_HEAD_WHO}  check   = agent precheck_agent, else manager\n"),
             ticket,
         )
     };
@@ -926,6 +939,9 @@ fn the_same_approver_approves_once_at_the_last_stage() {
             ("agent_last.ringi", &agent(LAST)),
             ("agent_once.ringi", &agent(ONCE)),
             ("agent_bare.ringi", &agent("")),
+            ("agent_first_last.ringi", &agent_first(LAST)),
+            ("agent_first_once.ringi", &agent_first(ONCE)),
+            ("agent_first_bare.ringi", &agent_first("")),
             ("precheck.flow", &flow),
         ],
     );
@@ -956,6 +972,14 @@ fn the_same_approver_approves_once_at_the_last_stage() {
     assert_eq!(said("agent_last.ringi"), [["`same approver approves once, at the last stage` does not make `first` wait for `second`: `second` is a stage an agent answers first."]; 2]);
     assert_eq!(said("agent_once.ringi"), [["`same approver approves once` does not do `second` with the approval of `first`: `second` is a stage an agent answers."]; 2]);
     assert!(said("agent_bare.ringi").iter().all(|notes| notes.is_empty()), "{:?}", said("agent_bare.ringi"));
+    // an agent answers the earlier stage first: the manager answers it when the agent doubts, and
+    // the stage after it is done with that approval, or it waits for that stage; when the agent
+    // says ok, the manager answers the later stage alone, once
+    for file in ["agent_first_last.ringi", "agent_first_once.ringi"] {
+        let o = c.check(file, Options::default());
+        assert!(w506(&o).is_empty(), "{file}: {}", common::shown(&o, Lang::En));
+    }
+    assert_eq!(said("agent_first_bare.ringi"), [["If one approval is enough, write `same approver approves once` under `ticket`: `second` is then done with the approval of `first`."]; 2]);
     // the Japanese of the notes
     let ja = ringi::check::render(&c.check("between_once.ringi", Options::default()), Lang::Ja);
     assert!(ja.contains("  = `same approver approves once, at the last stage` と書けば、一度の承認で済みます。`first` は、あいだのステップのあとの `second` の承認を待ちます。\n"), "{ja}");
@@ -1020,6 +1044,86 @@ fn simulate_says_where_the_same_approver_answers_once() {
     assert_eq!(keys(&ways("between.ringi", &[], "second")), "null null false false [] []");
 }
 
+/// `simulate` says what the line of the same approver does once an agent doubts (DESIGN 5.12, 10.3):
+/// the one after `else` answers the agent's stage then, and the stage right after it that they
+/// alone answer is done with that approval (`same approver approves once`), or the agent's stage
+/// waits for the last stage ahead they alone answer (`, at the last stage`). The stage done so
+/// keeps its deadline, since it is answered when the agent agrees. An agent's stage that comes
+/// after is never done with an approval before it, nor waited for. The JSON says it in
+/// `once_if_the_agent_doubts`.
+#[test]
+fn simulate_says_what_the_same_approver_does_once_an_agent_doubts() {
+    const FORM: &str = "  category : choice \"Category\"\n    travel   \"Travel\"\n    expense  \"Expense\"\n    purchase \"Purchase\"\n  amount   : money[JPY] \"Amount\"  range >=1JPY <=10_000_000JPY\n  purpose  : text \"Purpose\"  count >=1 <=100\n";
+    const USES: &str = "use flow precheck_agent from \"precheck.flow\"\n";
+    let first = |ticket: &str| once_request(FORM, USES, "  first   check\n  second  head\n", &format!("{MANAGER_HEAD_WHO}  check   = agent precheck_agent, else manager\n"), ticket);
+    let later = |ticket: &str| once_request(FORM, USES, "  first   manager\n  second  check\n", &format!("{MANAGER_HEAD_WHO}  check   = agent precheck_agent, else head\n"), ticket);
+    let flow = std::fs::read_to_string("examples/shared/precheck.flow").unwrap();
+    let c = Company::new(
+        "ringi-org-doubt-simulate",
+        "",
+        &[("first_once.ringi", &first(ONCE)), ("first_last.ringi", &first(LAST)), ("later_once.ringi", &later(ONCE)), ("later_last.ringi", &later(LAST)), ("precheck.flow", &flow)],
+    );
+    let simulate = |file: &str, more: &[&str]| {
+        let f = c.path(file).display().to_string();
+        let mut args: Vec<String> = ["simulate", &f, "--requester", "p03", "--on", "2026-06-01"].iter().map(|s| s.to_string()).collect();
+        args.extend(more.iter().map(|s| s.to_string()));
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        assert_eq!(ringi::run::run(&args, common::joined(), &mut out, &mut err), 0, "{}", String::from_utf8_lossy(&err));
+        String::from_utf8(out).unwrap()
+    };
+    let form: &[&str] = &["--form", "days = 3, category = travel, amount = 1_000JPY, purpose = \"A taxi\""];
+    let check = "  first   check (manager when the agent doubts): p02 (Head of Sales)\n";
+    // `same approver approves once`: the stage after it, with the form and without it, in English
+    // and in Japanese; it keeps its deadline
+    let done = "  second  head: p02 (Head of Sales); when the agent doubts, done with the approval of `first` (`same approver approves once`)\n";
+    for more in [&[][..], form] {
+        let out = simulate("first_once.ringi", more);
+        assert!(out.contains(check) && out.contains(done), "{out}");
+    }
+    // the small expense of the examples: the manager decides after the agent's precheck, and the
+    // decision keeps its deadline
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let args: Vec<String> = ["simulate", "examples/expense.ringi", "--requester", "e1201", "--on", "2026-11-16", "--form", "category = expense, items = [{what: \"Taxi\", price: 50_000JPY}], purpose = \"Taxi\", used_on = 2026-11-10"].iter().map(|s| s.to_string()).collect();
+    assert_eq!(ringi::run::run(&args, common::joined(), &mut out, &mut err), 0, "{}", String::from_utf8_lossy(&err));
+    let out = String::from_utf8(out).unwrap();
+    assert!(
+        out.contains("  decide    manager: e1101 (Manager of Section 1A); when the agent doubts, done with the approval of `precheck` (`same approver approves once`)\n            due 3 business days after it starts, at the end of the day\n"),
+        "{out}"
+    );
+    let ja = simulate("first_once.ringi", &["--lang", "ja"]);
+    assert!(ja.contains("  second  head：p02（営業部長）。エージェントが迷ったときは、`first` の承認で済みます（`same approver approves once`）\n"), "{ja}");
+    // `, at the last stage`: the agent's stage waits for the later one
+    let waits = "  first   check (manager when the agent doubts): p02 (Head of Sales); when the agent doubts, answers once, at `second` (`same approver approves once, at the last stage`)\n";
+    for more in [&[][..], form] {
+        let out = simulate("first_last.ringi", more);
+        assert!(out.contains(waits) && out.contains("  second  head: p02 (Head of Sales)\n"), "{out}");
+    }
+    let ja = simulate("first_last.ringi", &["--lang", "ja"]);
+    assert!(ja.contains("。エージェントが迷ったときは、`second` で一度だけ答えます（`same approver approves once, at the last stage`）\n"), "{ja}");
+    // an agent's stage that comes after: the agent answers it first, either way
+    for file in ["later_once.ringi", "later_last.ringi"] {
+        let out = simulate(file, form);
+        assert!(out.contains("  first   manager: p02 (Head of Sales)\n") && out.contains("  second  check (head when the agent doubts): p02 (Head of Sales)\n"), "{file}: {out}");
+    }
+    // the JSON
+    let doubts = |file: &str| -> Vec<String> {
+        let mut args = vec!["--format", "json"];
+        args.extend(form);
+        let v = ritsu_base::json::parse(&simulate(file, &args)).unwrap();
+        let stages = v.get("requesters").and_then(|x| x.as_arr()).unwrap()[0].get("stages").and_then(|x| x.as_arr()).unwrap().to_vec();
+        stages
+            .iter()
+            .map(|st| {
+                let w = st.get("ways").and_then(|x| x.as_arr()).unwrap()[0].clone();
+                ["once_with", "once_if_the_agent_doubts"].map(|k| w.get(k).map(|x| x.compact()).unwrap_or_default()).join(" ")
+            })
+            .collect()
+    };
+    assert_eq!(doubts("first_once.ringi"), ["null false", r#""first" true"#]);
+    assert_eq!(doubts("first_last.ringi"), [r#""second" true"#, "null false"]);
+    assert_eq!(doubts("later_once.ringi"), ["null false", "null false"]);
+}
+
 /// The JSON of `simulate` says the same keys of a way whatever the request writes under `ticket`
 /// (DESIGN 16.2): with `same approver approves once`, and with no line of the same approver, a way
 /// has `once_if_it_comes`, `once_among` and `once_among_written` too, as `false` and two empty
@@ -1050,7 +1154,7 @@ fn the_json_of_simulate_has_the_same_keys_of_a_way_whatever_the_ticket_says() {
     let more = |w: &ritsu_base::json::Json| ["once_if_it_comes", "once_among", "once_among_written"].map(|k| w.get(k).map(|x| x.compact()).unwrap_or_default()).join(" ");
     // one list of keys, in one order, in every file
     let all = names(&ways("next_last.ringi", &[])[0]);
-    assert_eq!(all, ["way", "way_written", "case", "people", "needed", "proxies", "nobody", "once_with", "once_with_written", "once_if_no_stage_between", "once_if_it_comes", "once_among", "once_among_written", "late"]);
+    assert_eq!(all, ["way", "way_written", "case", "people", "needed", "proxies", "nobody", "once_with", "once_with_written", "once_if_no_stage_between", "once_if_it_comes", "once_among", "once_among_written", "once_if_the_agent_doubts", "late"]);
     for (file, _) in &files {
         for form in [&[][..], &["--form", "days = 3"][..], &["--form", "days = 8"][..]] {
             let ws = ways(file, form);

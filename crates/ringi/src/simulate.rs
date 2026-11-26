@@ -121,6 +121,9 @@ pub struct WaySim {
     pub needed: Option<usize>,
     /// What it comes to, as `same approver approves once` reads it.
     pub out: Out,
+    /// An agent's way: what it comes to once the agent doubts and the way after `else` answers it,
+    /// as `same approver approves once` reads it (DESIGN 5.12); None for a way with no agent.
+    pub doubted: Option<Out>,
     /// The stage whose approval does it, with `same approver approves once` (DESIGN 5.12): the one
     /// right before it, or, with `, at the last stage`, the later stage it waits for.
     pub once_with: Option<String>,
@@ -133,6 +136,10 @@ pub struct WaySim {
     pub once_among: Vec<String>,
     /// Without the form: whether it is done so only where no other stage comes between them.
     pub once_if_nothing_between: bool,
+    /// `once_with` holds only once an agent doubts: with `same approver approves once`, the agent of
+    /// the stage `once_with`, which the same person answers then; with `, at the last stage`, the
+    /// agent of this way, whose stage then waits for `once_with` (DESIGN 5.12).
+    pub once_if_doubted: bool,
     /// What the stage does when it is late and has nowhere to go up to (`when late escalate`, DESIGN
     /// 5.10): `it cannot go up, and expires at the deadline`.
     pub late: Option<Text>,
@@ -412,7 +419,8 @@ fn stage_sim(sv: &Solver, org: &Org, v: &Version, o: &Occ, on: i64, request: &Fi
                 }
             }
             let late = (!late.is_empty()).then(|| Text::new(late.iter().map(|t| t.ja.clone()).collect::<Vec<_>>().join("。"), late.iter().map(|t| t.en.clone()).collect::<Vec<_>>().join("; ")));
-            let mut w = WaySim { way: c.way.clone(), label: c.label.clone(), people: Vec::new(), proxies: Vec::new(), nobody: None, goes: None, needed: None, out, once_with: None, once_waits: false, once_if_it_comes: false, once_among: Vec::new(), once_if_nothing_between: false, late };
+            let doubted = c.agent.then(|| listing::out_doubted(sv, o, q, &c));
+            let mut w = WaySim { way: c.way.clone(), label: c.label.clone(), people: Vec::new(), proxies: Vec::new(), nobody: None, goes: None, needed: None, out, doubted, once_with: None, once_waits: false, once_if_it_comes: false, once_among: Vec::new(), once_if_nothing_between: false, once_if_doubted: false, late };
             match &c.found {
                 Found::People(ps) => {
                     w.people = ps.clone();
@@ -679,9 +687,10 @@ pub fn simulate(o: &Outcome, run: &Run, ask: &Ask) -> Result<Answer, Text> {
             (Once::Last, true) => last_on_the_route(&mut stages),
             (Once::Last, false) => last_on_each_path(&sv, &paths, &mut stages),
         }
-        // a stage done with another stage's approval has no clock, and is never late
+        // a stage done with another stage's approval has no clock, and is never late (one done so
+        // only once an agent doubts is answered when the agent does not)
         for w in stages.iter_mut().flat_map(|st| st.ways.iter_mut()) {
-            if w.once_with.is_some() && (chosen.is_some() || !(w.once_if_nothing_between || w.once_if_it_comes)) {
+            if w.once_with.is_some() && !w.once_if_doubted && (chosen.is_some() || !(w.once_if_nothing_between || w.once_if_it_comes)) {
                 w.late = None;
             }
         }
@@ -690,7 +699,7 @@ pub fn simulate(o: &Outcome, run: &Run, ask: &Ask) -> Result<Answer, Text> {
         let mut first = true;
         for st in stages.iter_mut() {
             // (a way that waits only where a later stage comes to the same person may be answered here)
-            let done = !st.ways.is_empty() && st.ways.iter().all(|w| (w.once_with.is_some() && !(w.once_if_it_comes && chosen.is_none())) || w.out == Out::Pass);
+            let done = !st.ways.is_empty() && st.ways.iter().all(|w| (w.once_with.is_some() && !w.once_if_doubted && !(w.once_if_it_comes && chosen.is_none())) || w.out == Out::Pass);
             let waits = !st.shown.starts_with("circulate") && !st.shown.starts_with("note") && !done;
             if !waits {
                 continue;
@@ -711,16 +720,21 @@ pub fn simulate(o: &Outcome, run: &Run, ask: &Ask) -> Result<Answer, Text> {
 /// `same approver approves once` on the route the form comes to (DESIGN 5.12): a part of a stage
 /// that one person alone answers is done with the approval of the stage right before it, when that
 /// person approved it, every part of it; circulations and stages skipped for lack of an approver are
-/// passed over. A stage done so stands for the approval it is done with.
+/// passed over. A stage done so stands for the approval it is done with. Each agent answers as it
+/// is asked; where the stage right before is an agent's that the person answers once its agent
+/// doubts, the part is done with that approval then ([`WaySim::once_if_doubted`]).
 fn once_on_the_route(stages: &mut [StageSim]) {
     // the one person who approved the stage right before, and the stage they approved
     let mut last: Option<(String, String)> = None;
+    // the one person who answers every part of the agent's stage right before once its agent
+    // doubts, and that stage
+    let mut doubted: Option<(String, String)> = None;
     for st in stages.iter_mut() {
         if st.shown.starts_with("circulate ") || st.ways.iter().all(|w| w.out == Out::Pass) {
             continue;
         }
         if st.shown.starts_with("note ") {
-            last = None;
+            (last, doubted) = (None, None);
             continue;
         }
         let mut by: Option<String> = None;
@@ -729,8 +743,12 @@ fn once_on_the_route(stages: &mut [StageSim]) {
             match &w.out {
                 Out::Pass => {}
                 Out::By(x) => {
-                    match &last {
-                        Some((p, with)) if p == x => w.once_with = Some(with.clone()),
+                    match (&last, &doubted) {
+                        (Some((p, with)), _) if p == x => w.once_with = Some(with.clone()),
+                        (_, Some((p, with))) if p == x => {
+                            (w.once_with, w.once_if_doubted) = (Some(with.clone()), true);
+                            done = false;
+                        }
                         _ => done = false,
                     }
                     one &= by.get_or_insert_with(|| x.clone()) == x;
@@ -738,6 +756,7 @@ fn once_on_the_route(stages: &mut [StageSim]) {
                 Out::Other => (one, done) = (false, false),
             }
         }
+        doubted = doubted_by(st).map(|x| (x, st.stage.clone()));
         last = match (one, by) {
             (true, Some(x)) => {
                 let with = if done { last.map(|(_, w)| w).unwrap_or_else(|| st.stage.clone()) } else { st.stage.clone() };
@@ -748,17 +767,39 @@ fn once_on_the_route(stages: &mut [StageSim]) {
     }
 }
 
+/// The one person who answers every part of an agent's stage once its agents doubt: None where a
+/// part comes to another, or to others, or no part is an agent's.
+fn doubted_by(st: &StageSim) -> Option<String> {
+    let mut by: Option<&String> = None;
+    let mut agent = false;
+    for w in &st.ways {
+        agent |= w.doubted.is_some();
+        match w.doubted.as_ref().unwrap_or(&w.out) {
+            Out::Pass => {}
+            Out::By(x) if *by.get_or_insert(x) == x => {}
+            _ => return None,
+        }
+    }
+    by.filter(|_| agent).cloned()
+}
+
 /// `same approver approves once, at the last stage` on the route the form comes to (DESIGN 5.12): a
 /// part of a stage that one person alone answers waits for the last stage after it that the same
-/// person alone answers a part of, and is done with the approval given there.
+/// person alone answers a part of, and is done with the approval given there. An agent's part waits
+/// so once its agent doubts, as the way after `else` comes to the person then
+/// ([`WaySim::once_if_doubted`]); a stage an agent answers first is waited for by none.
 fn last_on_the_route(stages: &mut [StageSim]) {
     let alone: Vec<Vec<String>> = stages.iter().map(|st| st.ways.iter().filter_map(|w| if let Out::By(x) = &w.out { Some(x.clone()) } else { None }).collect()).collect();
     for a in 0..stages.len() {
         let after = stages[a + 1..].iter().map(|st| st.stage.clone()).collect::<Vec<_>>();
         for w in stages[a].ways.iter_mut() {
-            let Out::By(x) = &w.out else { continue };
-            if let Some(k) = alone[a + 1..].iter().rposition(|ps| ps.contains(x)) {
-                (w.once_with, w.once_waits) = (Some(after[k].clone()), true);
+            let (x, doubted) = match (&w.out, &w.doubted) {
+                (Out::By(x), _) => (x.clone(), false),
+                (_, Some(Out::By(x))) => (x.clone(), true),
+                _ => continue,
+            };
+            if let Some(k) = alone[a + 1..].iter().rposition(|ps| ps.contains(&x)) {
+                (w.once_with, w.once_waits, w.once_if_doubted) = (Some(after[k].clone()), true, doubted);
             }
         }
     }
@@ -768,7 +809,8 @@ fn last_on_the_route(stages: &mut [StageSim]) {
 /// the route, a way of a stage that one person alone answers waits for the last stage after it that
 /// the same person alone answers a part of ([`listing::later`]). Said as sure where it is one stage
 /// on every path the way is on, and that stage comes to them whatever the form; else with the
-/// stages it can be, the last of which that comes, and to them, is the one.
+/// stages it can be, the last of which that comes, and to them, is the one. An agent's way waits so
+/// once its agent doubts, as the way after `else` comes to the person then.
 fn last_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
     // each way of a stage as written, by its place among the stage's ways: what each path says
     let mut said: std::collections::BTreeMap<(String, String, usize), Vec<(Vec<String>, bool)>> = std::collections::BTreeMap::new();
@@ -778,9 +820,10 @@ fn last_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
         for (ia, o) in path.iter().enumerate() {
             let listing::Seen::Parts(parts) = &seen[ia] else { continue };
             let mut at = 0;
-            for ((_, _, cs), (_, outs)) in cases[ia].iter().zip(parts) {
-                for (n, _) in cs.iter().enumerate() {
-                    if let Some(Out::By(x)) = outs.get(n).filter(|_| outs.len() == cs.len()) {
+            for ((_, q, cs), (_, outs)) in cases[ia].iter().zip(parts) {
+                for (n, c) in cs.iter().enumerate() {
+                    let out = if c.agent { Some(listing::out_doubted(sv, o, *q, c)) } else { outs.get(n).filter(|_| outs.len() == cs.len()).cloned() };
+                    if let Some(Out::By(x)) = &out {
                         let (among, sure) = listing::later(path, &seen, ia, x);
                         said.entry((o.stage.clone(), o.spec.shown(), at)).or_default().push((among.iter().map(|k| path[*k].stage.clone()).collect(), sure));
                     }
@@ -802,7 +845,7 @@ fn last_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
             among.sort_by_key(|name| order(name));
             let Some(with) = among.last().cloned() else { continue };
             let sure = among.len() == 1 && rs.iter().all(|(names, s)| *s && names.len() == 1);
-            (w.once_with, w.once_waits) = (Some(with), true);
+            (w.once_with, w.once_waits, w.once_if_doubted) = (Some(with), true, w.doubted.is_some());
             if !sure {
                 (w.once_if_it_comes, w.once_among) = (true, among);
             }
@@ -814,14 +857,20 @@ fn last_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
 /// of the table, or every stage line), a way of a stage that one person alone answers is done with
 /// the approval of the stage before it that the same person alone approves, every part of it, where
 /// the stages between are passed over. Said as sure where it is so on every path the way is on, and
-/// else where no other stage comes between them (a stage whose condition decides it may come).
+/// else where no other stage comes between them (a stage whose condition decides it may come). A
+/// way no path does so is done so once the agents of the stages before it doubt, where they come
+/// to the person then: with the approval of the agent's stage, which is never done with an approval
+/// before it.
 fn once_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
     use listing::Before;
-    // each way of a stage as written, by its place among the stage's ways: what each path says
-    let mut said: std::collections::BTreeMap<(String, String, usize), Vec<Option<(String, bool)>>> = std::collections::BTreeMap::new();
+    // each way of a stage as written, by its place among the stage's ways: what each path says, as
+    // the agents answer and once they doubt
+    type Said = std::collections::BTreeMap<(String, String, usize), Vec<Option<(String, bool)>>>;
+    let (mut said, mut doubted): (Said, Said) = Default::default();
     for path in paths {
         let cases: Vec<_> = path.iter().map(|o| listing::stage_cases(sv, o)).collect();
         let seen: Vec<listing::Seen> = path.iter().zip(&cases).map(|(o, cs)| listing::seen_of(sv, o, cs)).collect();
+        let seen_doubted: Vec<listing::Seen> = path.iter().zip(&cases).map(|(o, cs)| listing::seen_doubted(sv, o, cs)).collect();
         for (ib, o) in path.iter().enumerate() {
             let listing::Seen::Parts(parts) = &seen[ib] else { continue };
             let mut at = 0;
@@ -833,7 +882,15 @@ fn once_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
                             Before::Maybe(k) => Some((path[k].stage.clone(), false)),
                             Before::Not => None,
                         };
-                        said.entry((o.stage.clone(), o.spec.shown(), at)).or_default().push(r);
+                        let d = match listing::before(path, &seen_doubted, ib, x) {
+                            _ if r.is_some() => None,
+                            Before::Sure(k) => Some((path[k].stage.clone(), true)),
+                            Before::Maybe(k) => Some((path[k].stage.clone(), false)),
+                            Before::Not => None,
+                        };
+                        let key = (o.stage.clone(), o.spec.shown(), at);
+                        doubted.entry(key.clone()).or_default().push(d);
+                        said.entry(key).or_default().push(r);
                     }
                     at += 1;
                 }
@@ -842,11 +899,18 @@ fn once_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
     }
     for st in stages.iter_mut() {
         for (at, w) in st.ways.iter_mut().enumerate() {
-            let Some(rs) = said.get(&(st.stage.clone(), st.shown.clone(), at)) else { continue };
+            let key = (st.stage.clone(), st.shown.clone(), at);
+            let Some(rs) = said.get(&key) else { continue };
+            let (rs, if_doubted) = match (rs.iter().flatten().next(), doubted.get(&key)) {
+                (Some(_), _) => (rs, false),
+                (None, Some(ds)) => (ds, true),
+                (None, None) => continue,
+            };
             let Some((with, _)) = rs.iter().flatten().next() else { continue };
             let sure = rs.iter().all(|r| r.as_ref().is_some_and(|(o, s)| *s && o == with));
             w.once_with = Some(with.clone());
             w.once_if_nothing_between = !sure;
+            w.once_if_doubted = if_doubted;
         }
     }
 }
@@ -855,16 +919,22 @@ fn once_on_each_path(sv: &Solver, paths: &[Vec<Occ>], stages: &mut [StageSim]) {
 /// way as the stage names it; `chosen` says whether the stages are the ones the form comes to.
 fn way_text(v: &Version, name: &Text, w: &WaySim, chosen: bool) -> Text {
     let t = way_alone(v, name, w);
-    let t = match &w.once_with {
-        None => t,
+    let once = match &w.once_with {
+        None => None,
         Some(_) if w.once_if_it_comes && !chosen && w.once_among.len() > 1 => {
             let among = Text::list(&w.once_among.iter().map(|n| Text::same(format!("`{n}`"))).collect::<Vec<_>>());
-            tr!("{}。{} のうち、来て同じ人に当たる最後のステップで、一度だけ答えます", "{}; answers once, at the last of {} that comes, and to them", t.ja, among.ja; t.en, among.en)
+            Some(tr!("{} のうち、来て同じ人に当たる最後のステップで、一度だけ答えます", "answers once, at the last of {} that comes, and to them", among.ja; among.en))
         }
-        Some(s) if w.once_if_it_comes && !chosen => tr!("{}。`{s}` が来て同じ人に当たるなら、そこで一度だけ答えます", "{}; answers once, at `{s}`, where it comes, and to them", t.ja; t.en),
-        Some(s) if w.once_waits => tr!("{}。`{s}` で一度だけ答えます（`same approver approves once, at the last stage`）", "{}; answers once, at `{s}` (`same approver approves once, at the last stage`)", t.ja; t.en),
-        Some(s) if chosen || !w.once_if_nothing_between => tr!("{}。`{s}` の承認で済みます（`same approver approves once`）", "{}; done with the approval of `{s}` (`same approver approves once`)", t.ja; t.en),
-        Some(s) => tr!("{}。あいだにほかのステップが来なければ、`{s}` の承認で済みます", "{}; done with the approval of `{s}` where no other stage comes between them", t.ja; t.en),
+        Some(s) if w.once_if_it_comes && !chosen => Some(tr!("`{s}` が来て同じ人に当たるなら、そこで一度だけ答えます", "answers once, at `{s}`, where it comes, and to them")),
+        Some(s) if w.once_waits => Some(tr!("`{s}` で一度だけ答えます（`same approver approves once, at the last stage`）", "answers once, at `{s}` (`same approver approves once, at the last stage`)")),
+        Some(s) if chosen || !w.once_if_nothing_between => Some(tr!("`{s}` の承認で済みます（`same approver approves once`）", "done with the approval of `{s}` (`same approver approves once`)")),
+        Some(s) => Some(tr!("あいだにほかのステップが来なければ、`{s}` の承認で済みます", "done with the approval of `{s}` where no other stage comes between them")),
+    };
+    // only once an agent doubts: the agent of this way, or of the stage whose approval does it
+    let t = match once {
+        None => t,
+        Some(o) if w.once_if_doubted => tr!("{}。エージェントが迷ったときは、{}", "{}; when the agent doubts, {}", t.ja, o.ja; t.en, o.en),
+        Some(o) => tr!("{}。{}", "{}; {}", t.ja, o.ja; t.en, o.en),
     };
     match &w.late {
         Some(l) => tr!("{}。期限を過ぎると、{}", "{}; when it is late, {}", t.ja, l.ja; t.en, l.en),
@@ -1152,6 +1222,10 @@ pub fn to_json(file: &str, a: &Answer, lang: Lang) -> Json {
                                             ("once_if_it_comes", Json::from(w.once_if_it_comes)),
                                             ("once_among", Json::arr(w.once_among.iter().map(|x| Json::str(names.stage(x))))),
                                             ("once_among_written", Json::arr(w.once_among.iter().map(Json::str))),
+                                            // whether `once_with` holds only once an agent doubts:
+                                            // the agent of the stage `once_with`, or, with `, at
+                                            // the last stage`, of this way
+                                            ("once_if_the_agent_doubts", Json::from(w.once_if_doubted)),
                                             ("late", Json::opt_str(w.late.as_ref().map(|l| l.get(lang).to_string()))),
                                         ])
                                     })),

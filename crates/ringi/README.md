@@ -176,11 +176,11 @@ examples/expense.ringi on 2026-12-29, in the organization from 2026-04-01
   without `--form`: every stage the route can come to, by each way to choose its approver; which come depends on the form
 requester e1201 (Sales staff 1)
   precheck  check (manager when the agent doubts): e1101 (Manager of Section 1A)
-  first     manager: e1101 (Manager of Section 1A)
+  first     manager: e1101 (Manager of Section 1A); when the agent doubts, done with the approval of `precheck` where no other stage comes between them
   second    dept_head: e3101 (Head of Sales Department 1) [e1101 (Manager of Section 1A) too, as the proxy of e3101]
             accounting: one of e1001 (Head of Accounting), e1002 (Accountant)
   decide    travel_agent (manager when the agent doubts): e1101 (Manager of Section 1A)
-            manager: e1101 (Manager of Section 1A)
+            manager: e1101 (Manager of Section 1A); when the agent doubts, done with the approval of `precheck` where no other stage comes between them
             dept_head: e3101 (Head of Sales Department 1) [e1101 (Manager of Section 1A) too, as the proxy of e3101]
             division_head: e0101 (Head of Sales Division)
 ```

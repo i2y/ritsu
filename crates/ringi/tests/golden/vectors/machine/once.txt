@@ -214,315 +214,329 @@ scenario not_across_an_agent, after line 85: sent back: send back by e0101 at 20
 scenario not_across_an_agent, after line 85: retracted: retract by e3101 at 2026-11-16 12:00 -> second, in progress
 scenario not_across_an_agent, after line 85: clocks: late at 2026-11-20 00:00 -> decide, in progress
 scenario not_across_an_agent, after line 85: clocks: late at 2026-11-26 00:00 -> expired
-scenario done_where_it_went_up_to_for_lack_of_an_approver, line 93: submit by e3101 at 2026-11-16 10:00 -> first, in progress
-scenario done_where_it_went_up_to_for_lack_of_an_approver, line 94: approve by e0101 at 2026-11-16 11:00 -> approved
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: approvals: approve by e0101 at 2026-11-16 10:00 -> approved
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: rejections: reject by e0101 at 2026-11-16 10:00 -> rejected
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: the requester: approve by e3101 at 2026-11-16 10:00 -> refused (person)
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: the requester: withdraw by e3101 at 2026-11-16 10:00 -> with requester
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: sent back: send back by e0101 at 2026-11-16 10:00 -> with requester
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: sent back: resubmit by e3101 at 2026-11-17 10:00 -> first, in progress
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: sent back: discard by e3101 at 2026-11-16 10:00 -> withdrawn
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: paused: pause by e0101 at 2026-11-16 10:00 -> refused (event)
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: clocks: late at 2026-11-20 00:00 -> first, in progress
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: clocks: late at 2026-11-26 00:00 -> expired
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: clocks: late at 2026-11-19 23:59 -> refused (clock)
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: clocks: approve by e0101 at 2026-11-20 00:00 -> refused (clock)
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: sent back to the limit: send back by e0101 at 2026-11-17 10:00 -> with requester
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: sent back to the limit: resubmit by e3101 at 2026-11-18 10:00 -> first, in progress
-scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 93: sent back to the limit: send back by e0101 at 2026-11-18 10:00 -> refused (limit)
-scenario not_done_where_it_went_up_to_late, line 102: submit by e1201 at 2026-11-16 10:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, line 103: approve by e3101 at 2026-11-16 11:00 -> second, in progress
-scenario not_done_where_it_went_up_to_late, line 104: late at 2026-11-20 00:00 -> second, in progress
-scenario not_done_where_it_went_up_to_late, line 105: approve by e3101 at 2026-11-20 10:00 -> decide, in progress
-scenario not_done_where_it_went_up_to_late, after line 102: approvals: approve by e3101 at 2026-11-16 10:00 -> second, in progress
-scenario not_done_where_it_went_up_to_late, after line 102: rejections: reject by e3101 at 2026-11-16 10:00 -> rejected
-scenario not_done_where_it_went_up_to_late, after line 102: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
-scenario not_done_where_it_went_up_to_late, after line 102: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
-scenario not_done_where_it_went_up_to_late, after line 102: sent back: send back by e3101 at 2026-11-16 10:00 -> with requester
-scenario not_done_where_it_went_up_to_late, after line 102: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 102: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
-scenario not_done_where_it_went_up_to_late, after line 102: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario not_done_where_it_went_up_to_late, after line 102: paused: pause by e3101 at 2026-11-16 10:00 -> refused (event)
-scenario not_done_where_it_went_up_to_late, after line 102: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 102: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 102: clocks: late at 2026-11-20 00:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 102: clocks: late at 2026-11-26 00:00 -> expired
-scenario not_done_where_it_went_up_to_late, after line 102: clocks: late at 2026-11-19 23:59 -> refused (clock)
-scenario not_done_where_it_went_up_to_late, after line 102: clocks: approve by e3101 at 2026-11-20 00:00 -> refused (clock)
-scenario not_done_where_it_went_up_to_late, after line 102: sent back to the limit: send back by e3101 at 2026-11-17 10:00 -> with requester
-scenario not_done_where_it_went_up_to_late, after line 102: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 102: sent back to the limit: send back by e3101 at 2026-11-18 10:00 -> refused (limit)
-scenario not_done_where_it_went_up_to_late, after line 103: approvals: approve by e1101 at 2026-11-16 11:00 -> decide, in progress
-scenario not_done_where_it_went_up_to_late, after line 103: rejections: reject by e1101 at 2026-11-16 11:00 -> rejected
-scenario not_done_where_it_went_up_to_late, after line 103: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
-scenario not_done_where_it_went_up_to_late, after line 103: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
-scenario not_done_where_it_went_up_to_late, after line 103: sent back: send back by e1101 at 2026-11-16 11:00 -> with requester
-scenario not_done_where_it_went_up_to_late, after line 103: sent back: resubmit by e1201 at 2026-11-17 11:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 103: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
-scenario not_done_where_it_went_up_to_late, after line 103: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario not_done_where_it_went_up_to_late, after line 103: sent back: send back by e1101 at 2026-11-16 11:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 103: retracted: retract by e3101 at 2026-11-16 11:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 103: clocks: late at 2026-11-26 00:00 -> expired
-scenario not_done_where_it_went_up_to_late, after line 105: approvals: approve by e0101 at 2026-11-20 10:00 -> approved
-scenario not_done_where_it_went_up_to_late, after line 105: rejections: reject by e0101 at 2026-11-20 10:00 -> rejected
-scenario not_done_where_it_went_up_to_late, after line 105: the requester: approve by e1201 at 2026-11-20 10:00 -> refused (person)
-scenario not_done_where_it_went_up_to_late, after line 105: the requester: withdraw by e1201 at 2026-11-20 10:00 -> refused (state)
-scenario not_done_where_it_went_up_to_late, after line 105: sent back: send back by e0101 at 2026-11-20 10:00 -> with requester
-scenario not_done_where_it_went_up_to_late, after line 105: sent back: resubmit by e1201 at 2026-11-21 10:00 -> first, in progress
-scenario not_done_where_it_went_up_to_late, after line 105: sent back: discard by e1201 at 2026-11-20 10:00 -> withdrawn
-scenario not_done_where_it_went_up_to_late, after line 105: sent back: resubmit late at 2026-11-26 00:00 -> expired
-scenario not_done_where_it_went_up_to_late, after line 105: sent back: send back by e0101 at 2026-11-20 10:00 -> second, in progress
-scenario not_done_where_it_went_up_to_late, after line 105: retracted: retract by e3101 at 2026-11-20 10:00 -> second, in progress
-scenario not_done_where_it_went_up_to_late, after line 105: clocks: late at 2026-11-26 00:00 -> decide, in progress
-scenario not_done_where_it_went_up_to_late, after line 105: clocks: late at 2026-12-02 00:00 -> expired
-scenario done_after_the_one_it_went_up_to_approves, line 112: submit by e1201 at 2026-11-16 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, line 113: late at 2026-11-20 00:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, line 114: approve by e3101 at 2026-11-20 10:00 -> decide, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 112: approvals: approve by e1101 at 2026-11-16 10:00 -> second, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 112: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
-scenario done_after_the_one_it_went_up_to_approves, after line 112: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
-scenario done_after_the_one_it_went_up_to_approves, after line 112: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
-scenario done_after_the_one_it_went_up_to_approves, after line 112: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
-scenario done_after_the_one_it_went_up_to_approves, after line 112: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 112: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
-scenario done_after_the_one_it_went_up_to_approves, after line 112: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario done_after_the_one_it_went_up_to_approves, after line 112: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
-scenario done_after_the_one_it_went_up_to_approves, after line 112: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 112: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 112: clocks: late at 2026-11-26 00:00 -> expired
-scenario done_after_the_one_it_went_up_to_approves, after line 112: clocks: late at 2026-11-19 23:59 -> refused (clock)
-scenario done_after_the_one_it_went_up_to_approves, after line 112: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
-scenario done_after_the_one_it_went_up_to_approves, after line 112: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
-scenario done_after_the_one_it_went_up_to_approves, after line 112: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 112: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> refused (limit)
-scenario done_after_the_one_it_went_up_to_approves, after line 114: approvals: approve by e0101 at 2026-11-20 10:00 -> approved
-scenario done_after_the_one_it_went_up_to_approves, after line 114: rejections: reject by e0101 at 2026-11-20 10:00 -> rejected
-scenario done_after_the_one_it_went_up_to_approves, after line 114: the requester: approve by e1201 at 2026-11-20 10:00 -> refused (person)
-scenario done_after_the_one_it_went_up_to_approves, after line 114: the requester: withdraw by e1201 at 2026-11-20 10:00 -> refused (state)
-scenario done_after_the_one_it_went_up_to_approves, after line 114: sent back: send back by e0101 at 2026-11-20 10:00 -> with requester
-scenario done_after_the_one_it_went_up_to_approves, after line 114: sent back: resubmit by e1201 at 2026-11-21 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 114: sent back: discard by e1201 at 2026-11-20 10:00 -> withdrawn
-scenario done_after_the_one_it_went_up_to_approves, after line 114: sent back: resubmit late at 2026-11-26 00:00 -> expired
-scenario done_after_the_one_it_went_up_to_approves, after line 114: sent back: send back by e0101 at 2026-11-20 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 114: retracted: retract by e3101 at 2026-11-20 10:00 -> first, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 114: clocks: late at 2026-11-26 00:00 -> decide, in progress
-scenario done_after_the_one_it_went_up_to_approves, after line 114: clocks: late at 2026-12-02 00:00 -> expired
-scenario a_proxy_answers_for_one_and_then_for_themselves, line 122: submit by e1201 at 2026-12-28 10:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, line 123: approve by e1101 at 2026-12-28 11:00 -> second, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, line 124: approve by e1101 at 2026-12-28 12:00 -> decide, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: approvals: approve by e3101 at 2026-12-28 10:00 -> second, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: rejections: reject by e3101 at 2026-12-28 10:00 -> rejected
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: sent back: send back by e3101 at 2026-12-28 10:00 -> with requester
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: sent back: resubmit by e1201 at 2026-12-29 10:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: paused: pause by e3101 at 2026-12-28 10:00 -> refused (event)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: an administrator: add approver at 2026-12-28 10:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: an administrator: hand over at 2026-12-28 10:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: clocks: late at 2027-01-07 00:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: clocks: late at 2027-01-13 00:00 -> expired
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: clocks: late at 2027-01-06 23:59 -> refused (clock)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: clocks: approve by e3101 at 2027-01-07 00:00 -> refused (clock)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: sent back to the limit: send back by e3101 at 2026-12-29 10:00 -> with requester
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 122: sent back to the limit: send back by e3101 at 2026-12-30 10:00 -> refused (limit)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: approvals: approve by e1101 at 2026-12-28 11:00 -> decide, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: rejections: reject by e1101 at 2026-12-28 11:00 -> rejected
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: the requester: approve by e1201 at 2026-12-28 11:00 -> refused (person)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: the requester: withdraw by e1201 at 2026-12-28 11:00 -> with requester
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: sent back: send back by e1101 at 2026-12-28 11:00 -> with requester
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: sent back: resubmit by e1201 at 2026-12-29 11:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: sent back: discard by e1201 at 2026-12-28 11:00 -> withdrawn
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: sent back: send back by e1101 at 2026-12-28 11:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: retracted: retract by e1101 at 2026-12-28 11:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: clocks: late at 2027-01-07 00:00 -> second, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 123: clocks: late at 2027-01-13 00:00 -> expired
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: approvals: approve by e0101 at 2026-12-28 12:00 -> approved
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: rejections: reject by e0101 at 2026-12-28 12:00 -> rejected
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: the requester: withdraw by e1201 at 2026-12-28 12:00 -> refused (state)
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: sent back: send back by e0101 at 2026-12-28 12:00 -> with requester
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: sent back: resubmit by e1201 at 2026-12-29 12:00 -> first, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: sent back: send back by e0101 at 2026-12-28 12:00 -> second, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: retracted: retract by e1101 at 2026-12-28 12:00 -> second, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: clocks: late at 2027-01-07 00:00 -> decide, in progress
-scenario a_proxy_answers_for_one_and_then_for_themselves, after line 124: clocks: late at 2027-01-13 00:00 -> expired
-scenario sent_back_to_a_stage_that_was_done, line 133: send back by e0101 at 2026-11-16 12:00 -> second, in progress
-scenario sent_back_to_a_stage_that_was_done, line 134: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
-scenario sent_back_to_a_stage_that_was_done, after line 133: approvals: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
-scenario sent_back_to_a_stage_that_was_done, after line 133: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
-scenario sent_back_to_a_stage_that_was_done, after line 133: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
-scenario sent_back_to_a_stage_that_was_done, after line 133: the requester: withdraw by e1101 at 2026-11-16 12:00 -> with requester
-scenario sent_back_to_a_stage_that_was_done, after line 133: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
-scenario sent_back_to_a_stage_that_was_done, after line 133: sent back: resubmit by e1101 at 2026-11-17 12:00 -> first, in progress
-scenario sent_back_to_a_stage_that_was_done, after line 133: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
-scenario sent_back_to_a_stage_that_was_done, after line 133: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario sent_back_to_a_stage_that_was_done, after line 133: sent back: send back by e3101 at 2026-11-16 12:00 -> first, in progress
-scenario sent_back_to_a_stage_that_was_done, after line 133: retracted: retract by e3101 at 2026-11-16 12:00 -> first, in progress
-scenario sent_back_to_a_stage_that_was_done, after line 133: clocks: late at 2026-11-20 00:00 -> second, in progress
-scenario sent_back_to_a_stage_that_was_done, after line 133: clocks: late at 2026-11-26 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave, line 142: submit by e1201 at 2026-11-16 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, line 143: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave, line 144: send back by e0101 at 2026-11-16 12:00 -> middle, in progress
-scenario done_with_the_answer_the_stage_gave, line 145: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave, after line 142: approvals: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave, after line 142: rejections: reject by e3101 at 2026-11-16 10:00 -> rejected
-scenario done_with_the_answer_the_stage_gave, after line 142: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
-scenario done_with_the_answer_the_stage_gave, after line 142: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
-scenario done_with_the_answer_the_stage_gave, after line 142: sent back: send back by e3101 at 2026-11-16 10:00 -> with requester
-scenario done_with_the_answer_the_stage_gave, after line 142: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 142: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
-scenario done_with_the_answer_the_stage_gave, after line 142: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave, after line 142: paused: pause by e3101 at 2026-11-16 10:00 -> refused (event)
-scenario done_with_the_answer_the_stage_gave, after line 142: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 142: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 142: clocks: late at 2026-11-20 00:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 142: clocks: late at 2026-11-26 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave, after line 142: clocks: late at 2026-11-19 23:59 -> refused (clock)
-scenario done_with_the_answer_the_stage_gave, after line 142: clocks: approve by e3101 at 2026-11-20 00:00 -> refused (clock)
-scenario done_with_the_answer_the_stage_gave, after line 142: sent back to the limit: send back by e3101 at 2026-11-17 10:00 -> with requester
-scenario done_with_the_answer_the_stage_gave, after line 142: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 142: sent back to the limit: send back by e3101 at 2026-11-18 10:00 -> refused (limit)
-scenario done_with_the_answer_the_stage_gave, after line 143: approvals: approve by e0101 at 2026-11-16 11:00 -> approved
-scenario done_with_the_answer_the_stage_gave, after line 143: rejections: reject by e0101 at 2026-11-16 11:00 -> rejected
-scenario done_with_the_answer_the_stage_gave, after line 143: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
-scenario done_with_the_answer_the_stage_gave, after line 143: the requester: withdraw by e1201 at 2026-11-16 11:00 -> refused (state)
-scenario done_with_the_answer_the_stage_gave, after line 143: sent back: send back by e0101 at 2026-11-16 11:00 -> with requester
-scenario done_with_the_answer_the_stage_gave, after line 143: sent back: resubmit by e1201 at 2026-11-17 11:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 143: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
-scenario done_with_the_answer_the_stage_gave, after line 143: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave, after line 143: sent back: send back by e0101 at 2026-11-16 11:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 143: retracted: retract by e3101 at 2026-11-16 11:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 143: clocks: late at 2026-11-20 00:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave, after line 143: clocks: late at 2026-11-26 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave, after line 144: approvals: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave, after line 144: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
-scenario done_with_the_answer_the_stage_gave, after line 144: the requester: approve by e1201 at 2026-11-16 12:00 -> refused (person)
-scenario done_with_the_answer_the_stage_gave, after line 144: the requester: withdraw by e1201 at 2026-11-16 12:00 -> with requester
-scenario done_with_the_answer_the_stage_gave, after line 144: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
-scenario done_with_the_answer_the_stage_gave, after line 144: sent back: resubmit by e1201 at 2026-11-17 12:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 144: sent back: discard by e1201 at 2026-11-16 12:00 -> withdrawn
-scenario done_with_the_answer_the_stage_gave, after line 144: sent back: resubmit late at 2026-11-20 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave, after line 144: sent back: send back by e3101 at 2026-11-16 12:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 144: retracted: retract by e3101 at 2026-11-16 12:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave, after line 144: clocks: late at 2026-11-20 00:00 -> middle, in progress
-scenario done_with_the_answer_the_stage_gave, after line 144: clocks: late at 2026-11-26 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 153: submit by e1201 at 2026-12-28 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 154: approve by e1101 at 2026-12-28 11:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 155: send back by e0101 at 2026-12-28 12:00 -> middle, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 156: approve by e3101 at 2026-12-28 13:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: approvals: approve by e3101 at 2026-12-28 10:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: rejections: reject by e3101 at 2026-12-28 10:00 -> rejected
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: sent back: send back by e3101 at 2026-12-28 10:00 -> with requester
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: sent back: resubmit by e1201 at 2026-12-29 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: paused: pause by e3101 at 2026-12-28 10:00 -> refused (event)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: an administrator: add approver at 2026-12-28 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: an administrator: hand over at 2026-12-28 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: clocks: late at 2027-01-07 00:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: clocks: late at 2027-01-13 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: clocks: late at 2027-01-06 23:59 -> refused (clock)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: clocks: approve by e3101 at 2027-01-07 00:00 -> refused (clock)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: sent back to the limit: send back by e3101 at 2026-12-29 10:00 -> with requester
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 153: sent back to the limit: send back by e3101 at 2026-12-30 10:00 -> refused (limit)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: approvals: approve by e0101 at 2026-12-28 11:00 -> approved
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: rejections: reject by e0101 at 2026-12-28 11:00 -> rejected
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: the requester: approve by e1201 at 2026-12-28 11:00 -> refused (person)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: the requester: withdraw by e1201 at 2026-12-28 11:00 -> refused (state)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: sent back: send back by e0101 at 2026-12-28 11:00 -> with requester
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: sent back: resubmit by e1201 at 2026-12-29 11:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: sent back: discard by e1201 at 2026-12-28 11:00 -> withdrawn
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: sent back: send back by e0101 at 2026-12-28 11:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: retracted: retract by e1101 at 2026-12-28 11:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: clocks: late at 2027-01-07 00:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 154: clocks: late at 2027-01-13 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: approvals: approve by e3101 at 2026-12-28 12:00 -> decide, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: rejections: reject by e3101 at 2026-12-28 12:00 -> rejected
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: the requester: withdraw by e1201 at 2026-12-28 12:00 -> with requester
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: sent back: send back by e3101 at 2026-12-28 12:00 -> with requester
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: sent back: resubmit by e1201 at 2026-12-29 12:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: sent back: send back by e3101 at 2026-12-28 12:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: retracted: retract by e1101 at 2026-12-28 12:00 -> first, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: clocks: late at 2027-01-07 00:00 -> middle, in progress
-scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 155: clocks: late at 2027-01-13 00:00 -> expired
-scenario made_again_after_it_was_done, line 165: send back by e0101 at 2026-11-16 12:00 -> with requester
-scenario made_again_after_it_was_done, line 166: resubmit by e1101 at 2026-11-17 10:00 -> first, in progress
-scenario made_again_after_it_was_done, line 167: approve by e3101 at 2026-11-17 11:00 -> decide, in progress
-scenario made_again_after_it_was_done, after line 166: approvals: approve by e3101 at 2026-11-17 10:00 -> decide, in progress
-scenario made_again_after_it_was_done, after line 166: rejections: reject by e3101 at 2026-11-17 10:00 -> rejected
-scenario made_again_after_it_was_done, after line 166: the requester: approve by e1101 at 2026-11-17 10:00 -> refused (person)
-scenario made_again_after_it_was_done, after line 166: the requester: withdraw by e1101 at 2026-11-17 10:00 -> with requester
-scenario made_again_after_it_was_done, after line 166: sent back: send back by e3101 at 2026-11-17 10:00 -> with requester
-scenario made_again_after_it_was_done, after line 166: sent back: resubmit by e1101 at 2026-11-18 10:00 -> first, in progress
-scenario made_again_after_it_was_done, after line 166: sent back: discard by e1101 at 2026-11-17 10:00 -> withdrawn
-scenario made_again_after_it_was_done, after line 166: sent back: resubmit late at 2026-11-21 00:00 -> expired
-scenario made_again_after_it_was_done, after line 166: clocks: late at 2026-11-21 00:00 -> first, in progress
-scenario made_again_after_it_was_done, after line 166: clocks: late at 2026-11-26 00:00 -> expired
-scenario made_again_after_it_was_done, after line 167: approvals: approve by e0101 at 2026-11-17 11:00 -> approved
-scenario made_again_after_it_was_done, after line 167: rejections: reject by e0101 at 2026-11-17 11:00 -> rejected
-scenario made_again_after_it_was_done, after line 167: the requester: approve by e1101 at 2026-11-17 11:00 -> refused (person)
-scenario made_again_after_it_was_done, after line 167: the requester: withdraw by e1101 at 2026-11-17 11:00 -> refused (state)
-scenario made_again_after_it_was_done, after line 167: sent back: send back by e0101 at 2026-11-17 11:00 -> with requester
-scenario made_again_after_it_was_done, after line 167: sent back: resubmit by e1101 at 2026-11-18 11:00 -> first, in progress
-scenario made_again_after_it_was_done, after line 167: sent back: discard by e1101 at 2026-11-17 11:00 -> withdrawn
-scenario made_again_after_it_was_done, after line 167: sent back: resubmit late at 2026-11-21 00:00 -> expired
-scenario made_again_after_it_was_done, after line 167: sent back: send back by e0101 at 2026-11-17 11:00 -> first, in progress
-scenario made_again_after_it_was_done, after line 167: retracted: retract by e3101 at 2026-11-17 11:00 -> first, in progress
-scenario made_again_after_it_was_done, after line 167: clocks: late at 2026-11-21 00:00 -> decide, in progress
-scenario made_again_after_it_was_done, after line 167: clocks: late at 2026-11-26 00:00 -> expired
-scenario taken_back_with_the_stage_it_did, line 176: retract by e3101 at 2026-11-16 12:00 -> first, in progress
-scenario taken_back_with_the_stage_it_did, line 177: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
-scenario a_proxy_with_a_part_of_their_own, line 185: submit by e1201 at 2026-12-28 10:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, line 186: approve by e1101 at 2026-12-28 11:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, line 187: approve by e1101 at 2026-12-28 12:00 -> decide, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: approvals: approve by e1101 at 2026-12-28 10:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: approvals: approve by e3101 at 2026-12-28 10:00 -> decide, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: rejections: reject by e1101 at 2026-12-28 10:00 -> rejected
-scenario a_proxy_with_a_part_of_their_own, after line 185: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
-scenario a_proxy_with_a_part_of_their_own, after line 185: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
-scenario a_proxy_with_a_part_of_their_own, after line 185: sent back: send back by e1101 at 2026-12-28 10:00 -> with requester
-scenario a_proxy_with_a_part_of_their_own, after line 185: sent back: resubmit by e1201 at 2026-12-29 10:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
-scenario a_proxy_with_a_part_of_their_own, after line 185: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario a_proxy_with_a_part_of_their_own, after line 185: paused: pause by e1101 at 2026-12-28 10:00 -> refused (event)
-scenario a_proxy_with_a_part_of_their_own, after line 185: an administrator: add approver at 2026-12-28 10:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: an administrator: hand over at 2026-12-28 10:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: clocks: late at 2027-01-07 00:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: clocks: late at 2027-01-13 00:00 -> expired
-scenario a_proxy_with_a_part_of_their_own, after line 185: clocks: late at 2027-01-06 23:59 -> refused (clock)
-scenario a_proxy_with_a_part_of_their_own, after line 185: clocks: approve by e1101 at 2027-01-07 00:00 -> refused (clock)
-scenario a_proxy_with_a_part_of_their_own, after line 185: sent back to the limit: send back by e1101 at 2026-12-29 10:00 -> with requester
-scenario a_proxy_with_a_part_of_their_own, after line 185: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 185: sent back to the limit: send back by e1101 at 2026-12-30 10:00 -> refused (limit)
-scenario a_proxy_with_a_part_of_their_own, after line 187: approvals: approve by e0101 at 2026-12-28 12:00 -> approved
-scenario a_proxy_with_a_part_of_their_own, after line 187: rejections: reject by e0101 at 2026-12-28 12:00 -> rejected
-scenario a_proxy_with_a_part_of_their_own, after line 187: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
-scenario a_proxy_with_a_part_of_their_own, after line 187: the requester: withdraw by e1201 at 2026-12-28 12:00 -> refused (state)
-scenario a_proxy_with_a_part_of_their_own, after line 187: sent back: send back by e0101 at 2026-12-28 12:00 -> with requester
-scenario a_proxy_with_a_part_of_their_own, after line 187: sent back: resubmit by e1201 at 2026-12-29 12:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 187: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
-scenario a_proxy_with_a_part_of_their_own, after line 187: sent back: resubmit late at 2027-01-07 00:00 -> expired
-scenario a_proxy_with_a_part_of_their_own, after line 187: sent back: send back by e0101 at 2026-12-28 12:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 187: retracted: retract by e1101 at 2026-12-28 12:00 -> first, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 187: clocks: late at 2027-01-07 00:00 -> decide, in progress
-scenario a_proxy_with_a_part_of_their_own, after line 187: clocks: late at 2027-01-13 00:00 -> expired
+scenario done_after_an_agent_doubts, line 96: agent answered at 2026-11-16 11:01 -> middle, in progress
+scenario done_after_an_agent_doubts, line 97: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario done_after_an_agent_doubts, after line 97: approvals: approve by e0101 at 2026-11-16 12:00 -> approved
+scenario done_after_an_agent_doubts, after line 97: rejections: reject by e0101 at 2026-11-16 12:00 -> rejected
+scenario done_after_an_agent_doubts, after line 97: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario done_after_an_agent_doubts, after line 97: the requester: withdraw by e1101 at 2026-11-16 12:00 -> refused (state)
+scenario done_after_an_agent_doubts, after line 97: sent back: send back by e0101 at 2026-11-16 12:00 -> with requester
+scenario done_after_an_agent_doubts, after line 97: sent back: resubmit by e1101 at 2026-11-17 12:00 -> first, in progress
+scenario done_after_an_agent_doubts, after line 97: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario done_after_an_agent_doubts, after line 97: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario done_after_an_agent_doubts, after line 97: sent back: send back by e0101 at 2026-11-16 12:00 -> middle, in progress
+scenario done_after_an_agent_doubts, after line 97: retracted: retract by e3101 at 2026-11-16 12:00 -> middle, in progress
+scenario done_after_an_agent_doubts, after line 97: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario done_after_an_agent_doubts, after line 97: clocks: late at 2026-11-26 00:00 -> expired
+scenario done_where_it_went_up_to_for_lack_of_an_approver, line 105: submit by e3101 at 2026-11-16 10:00 -> first, in progress
+scenario done_where_it_went_up_to_for_lack_of_an_approver, line 106: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: approvals: approve by e0101 at 2026-11-16 10:00 -> approved
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: rejections: reject by e0101 at 2026-11-16 10:00 -> rejected
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: the requester: approve by e3101 at 2026-11-16 10:00 -> refused (person)
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: the requester: withdraw by e3101 at 2026-11-16 10:00 -> with requester
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: sent back: send back by e0101 at 2026-11-16 10:00 -> with requester
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: sent back: resubmit by e3101 at 2026-11-17 10:00 -> first, in progress
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: sent back: discard by e3101 at 2026-11-16 10:00 -> withdrawn
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: paused: pause by e0101 at 2026-11-16 10:00 -> refused (event)
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: clocks: late at 2026-11-26 00:00 -> expired
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: clocks: approve by e0101 at 2026-11-20 00:00 -> refused (clock)
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: sent back to the limit: send back by e0101 at 2026-11-17 10:00 -> with requester
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: sent back to the limit: resubmit by e3101 at 2026-11-18 10:00 -> first, in progress
+scenario done_where_it_went_up_to_for_lack_of_an_approver, after line 105: sent back to the limit: send back by e0101 at 2026-11-18 10:00 -> refused (limit)
+scenario not_done_where_it_went_up_to_late, line 114: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, line 115: approve by e3101 at 2026-11-16 11:00 -> second, in progress
+scenario not_done_where_it_went_up_to_late, line 116: late at 2026-11-20 00:00 -> second, in progress
+scenario not_done_where_it_went_up_to_late, line 117: approve by e3101 at 2026-11-20 10:00 -> decide, in progress
+scenario not_done_where_it_went_up_to_late, after line 114: approvals: approve by e3101 at 2026-11-16 10:00 -> second, in progress
+scenario not_done_where_it_went_up_to_late, after line 114: rejections: reject by e3101 at 2026-11-16 10:00 -> rejected
+scenario not_done_where_it_went_up_to_late, after line 114: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario not_done_where_it_went_up_to_late, after line 114: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario not_done_where_it_went_up_to_late, after line 114: sent back: send back by e3101 at 2026-11-16 10:00 -> with requester
+scenario not_done_where_it_went_up_to_late, after line 114: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 114: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario not_done_where_it_went_up_to_late, after line 114: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario not_done_where_it_went_up_to_late, after line 114: paused: pause by e3101 at 2026-11-16 10:00 -> refused (event)
+scenario not_done_where_it_went_up_to_late, after line 114: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 114: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 114: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 114: clocks: late at 2026-11-26 00:00 -> expired
+scenario not_done_where_it_went_up_to_late, after line 114: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario not_done_where_it_went_up_to_late, after line 114: clocks: approve by e3101 at 2026-11-20 00:00 -> refused (clock)
+scenario not_done_where_it_went_up_to_late, after line 114: sent back to the limit: send back by e3101 at 2026-11-17 10:00 -> with requester
+scenario not_done_where_it_went_up_to_late, after line 114: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 114: sent back to the limit: send back by e3101 at 2026-11-18 10:00 -> refused (limit)
+scenario not_done_where_it_went_up_to_late, after line 115: approvals: approve by e1101 at 2026-11-16 11:00 -> decide, in progress
+scenario not_done_where_it_went_up_to_late, after line 115: rejections: reject by e1101 at 2026-11-16 11:00 -> rejected
+scenario not_done_where_it_went_up_to_late, after line 115: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario not_done_where_it_went_up_to_late, after line 115: the requester: withdraw by e1201 at 2026-11-16 11:00 -> with requester
+scenario not_done_where_it_went_up_to_late, after line 115: sent back: send back by e1101 at 2026-11-16 11:00 -> with requester
+scenario not_done_where_it_went_up_to_late, after line 115: sent back: resubmit by e1201 at 2026-11-17 11:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 115: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
+scenario not_done_where_it_went_up_to_late, after line 115: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario not_done_where_it_went_up_to_late, after line 115: sent back: send back by e1101 at 2026-11-16 11:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 115: retracted: retract by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 115: clocks: late at 2026-11-26 00:00 -> expired
+scenario not_done_where_it_went_up_to_late, after line 117: approvals: approve by e0101 at 2026-11-20 10:00 -> approved
+scenario not_done_where_it_went_up_to_late, after line 117: rejections: reject by e0101 at 2026-11-20 10:00 -> rejected
+scenario not_done_where_it_went_up_to_late, after line 117: the requester: approve by e1201 at 2026-11-20 10:00 -> refused (person)
+scenario not_done_where_it_went_up_to_late, after line 117: the requester: withdraw by e1201 at 2026-11-20 10:00 -> refused (state)
+scenario not_done_where_it_went_up_to_late, after line 117: sent back: send back by e0101 at 2026-11-20 10:00 -> with requester
+scenario not_done_where_it_went_up_to_late, after line 117: sent back: resubmit by e1201 at 2026-11-21 10:00 -> first, in progress
+scenario not_done_where_it_went_up_to_late, after line 117: sent back: discard by e1201 at 2026-11-20 10:00 -> withdrawn
+scenario not_done_where_it_went_up_to_late, after line 117: sent back: resubmit late at 2026-11-26 00:00 -> expired
+scenario not_done_where_it_went_up_to_late, after line 117: sent back: send back by e0101 at 2026-11-20 10:00 -> second, in progress
+scenario not_done_where_it_went_up_to_late, after line 117: retracted: retract by e3101 at 2026-11-20 10:00 -> second, in progress
+scenario not_done_where_it_went_up_to_late, after line 117: clocks: late at 2026-11-26 00:00 -> decide, in progress
+scenario not_done_where_it_went_up_to_late, after line 117: clocks: late at 2026-12-02 00:00 -> expired
+scenario done_after_the_one_it_went_up_to_approves, line 124: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, line 125: late at 2026-11-20 00:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, line 126: approve by e3101 at 2026-11-20 10:00 -> decide, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 124: approvals: approve by e1101 at 2026-11-16 10:00 -> second, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 124: rejections: reject by e1101 at 2026-11-16 10:00 -> rejected
+scenario done_after_the_one_it_went_up_to_approves, after line 124: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario done_after_the_one_it_went_up_to_approves, after line 124: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario done_after_the_one_it_went_up_to_approves, after line 124: sent back: send back by e1101 at 2026-11-16 10:00 -> with requester
+scenario done_after_the_one_it_went_up_to_approves, after line 124: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 124: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario done_after_the_one_it_went_up_to_approves, after line 124: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario done_after_the_one_it_went_up_to_approves, after line 124: paused: pause by e1101 at 2026-11-16 10:00 -> refused (event)
+scenario done_after_the_one_it_went_up_to_approves, after line 124: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 124: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 124: clocks: late at 2026-11-26 00:00 -> expired
+scenario done_after_the_one_it_went_up_to_approves, after line 124: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario done_after_the_one_it_went_up_to_approves, after line 124: clocks: approve by e1101 at 2026-11-20 00:00 -> refused (clock)
+scenario done_after_the_one_it_went_up_to_approves, after line 124: sent back to the limit: send back by e1101 at 2026-11-17 10:00 -> with requester
+scenario done_after_the_one_it_went_up_to_approves, after line 124: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 124: sent back to the limit: send back by e1101 at 2026-11-18 10:00 -> refused (limit)
+scenario done_after_the_one_it_went_up_to_approves, after line 126: approvals: approve by e0101 at 2026-11-20 10:00 -> approved
+scenario done_after_the_one_it_went_up_to_approves, after line 126: rejections: reject by e0101 at 2026-11-20 10:00 -> rejected
+scenario done_after_the_one_it_went_up_to_approves, after line 126: the requester: approve by e1201 at 2026-11-20 10:00 -> refused (person)
+scenario done_after_the_one_it_went_up_to_approves, after line 126: the requester: withdraw by e1201 at 2026-11-20 10:00 -> refused (state)
+scenario done_after_the_one_it_went_up_to_approves, after line 126: sent back: send back by e0101 at 2026-11-20 10:00 -> with requester
+scenario done_after_the_one_it_went_up_to_approves, after line 126: sent back: resubmit by e1201 at 2026-11-21 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 126: sent back: discard by e1201 at 2026-11-20 10:00 -> withdrawn
+scenario done_after_the_one_it_went_up_to_approves, after line 126: sent back: resubmit late at 2026-11-26 00:00 -> expired
+scenario done_after_the_one_it_went_up_to_approves, after line 126: sent back: send back by e0101 at 2026-11-20 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 126: retracted: retract by e3101 at 2026-11-20 10:00 -> first, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 126: clocks: late at 2026-11-26 00:00 -> decide, in progress
+scenario done_after_the_one_it_went_up_to_approves, after line 126: clocks: late at 2026-12-02 00:00 -> expired
+scenario a_proxy_answers_for_one_and_then_for_themselves, line 134: submit by e1201 at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, line 135: approve by e1101 at 2026-12-28 11:00 -> second, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, line 136: approve by e1101 at 2026-12-28 12:00 -> decide, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: approvals: approve by e3101 at 2026-12-28 10:00 -> second, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: rejections: reject by e3101 at 2026-12-28 10:00 -> rejected
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: sent back: send back by e3101 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: sent back: resubmit by e1201 at 2026-12-29 10:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: paused: pause by e3101 at 2026-12-28 10:00 -> refused (event)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: an administrator: add approver at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: an administrator: hand over at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: clocks: late at 2027-01-07 00:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: clocks: late at 2027-01-13 00:00 -> expired
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: clocks: late at 2027-01-06 23:59 -> refused (clock)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: clocks: approve by e3101 at 2027-01-07 00:00 -> refused (clock)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: sent back to the limit: send back by e3101 at 2026-12-29 10:00 -> with requester
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 134: sent back to the limit: send back by e3101 at 2026-12-30 10:00 -> refused (limit)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: approvals: approve by e1101 at 2026-12-28 11:00 -> decide, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: rejections: reject by e1101 at 2026-12-28 11:00 -> rejected
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: the requester: approve by e1201 at 2026-12-28 11:00 -> refused (person)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: the requester: withdraw by e1201 at 2026-12-28 11:00 -> with requester
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: sent back: send back by e1101 at 2026-12-28 11:00 -> with requester
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: sent back: resubmit by e1201 at 2026-12-29 11:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: sent back: discard by e1201 at 2026-12-28 11:00 -> withdrawn
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: sent back: send back by e1101 at 2026-12-28 11:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: retracted: retract by e1101 at 2026-12-28 11:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: clocks: late at 2027-01-07 00:00 -> second, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 135: clocks: late at 2027-01-13 00:00 -> expired
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: approvals: approve by e0101 at 2026-12-28 12:00 -> approved
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: rejections: reject by e0101 at 2026-12-28 12:00 -> rejected
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: the requester: withdraw by e1201 at 2026-12-28 12:00 -> refused (state)
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: sent back: send back by e0101 at 2026-12-28 12:00 -> with requester
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: sent back: resubmit by e1201 at 2026-12-29 12:00 -> first, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: sent back: send back by e0101 at 2026-12-28 12:00 -> second, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: retracted: retract by e1101 at 2026-12-28 12:00 -> second, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: clocks: late at 2027-01-07 00:00 -> decide, in progress
+scenario a_proxy_answers_for_one_and_then_for_themselves, after line 136: clocks: late at 2027-01-13 00:00 -> expired
+scenario sent_back_to_a_stage_that_was_done, line 145: send back by e0101 at 2026-11-16 12:00 -> second, in progress
+scenario sent_back_to_a_stage_that_was_done, line 146: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
+scenario sent_back_to_a_stage_that_was_done, after line 145: approvals: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario sent_back_to_a_stage_that_was_done, after line 145: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
+scenario sent_back_to_a_stage_that_was_done, after line 145: the requester: approve by e1101 at 2026-11-16 12:00 -> refused (person)
+scenario sent_back_to_a_stage_that_was_done, after line 145: the requester: withdraw by e1101 at 2026-11-16 12:00 -> with requester
+scenario sent_back_to_a_stage_that_was_done, after line 145: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
+scenario sent_back_to_a_stage_that_was_done, after line 145: sent back: resubmit by e1101 at 2026-11-17 12:00 -> first, in progress
+scenario sent_back_to_a_stage_that_was_done, after line 145: sent back: discard by e1101 at 2026-11-16 12:00 -> withdrawn
+scenario sent_back_to_a_stage_that_was_done, after line 145: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario sent_back_to_a_stage_that_was_done, after line 145: sent back: send back by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario sent_back_to_a_stage_that_was_done, after line 145: retracted: retract by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario sent_back_to_a_stage_that_was_done, after line 145: clocks: late at 2026-11-20 00:00 -> second, in progress
+scenario sent_back_to_a_stage_that_was_done, after line 145: clocks: late at 2026-11-26 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave, line 154: submit by e1201 at 2026-11-16 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, line 155: approve by e3101 at 2026-11-16 11:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave, line 156: send back by e0101 at 2026-11-16 12:00 -> middle, in progress
+scenario done_with_the_answer_the_stage_gave, line 157: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave, after line 154: approvals: approve by e3101 at 2026-11-16 10:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave, after line 154: rejections: reject by e3101 at 2026-11-16 10:00 -> rejected
+scenario done_with_the_answer_the_stage_gave, after line 154: the requester: approve by e1201 at 2026-11-16 10:00 -> refused (person)
+scenario done_with_the_answer_the_stage_gave, after line 154: the requester: withdraw by e1201 at 2026-11-16 10:00 -> with requester
+scenario done_with_the_answer_the_stage_gave, after line 154: sent back: send back by e3101 at 2026-11-16 10:00 -> with requester
+scenario done_with_the_answer_the_stage_gave, after line 154: sent back: resubmit by e1201 at 2026-11-17 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 154: sent back: discard by e1201 at 2026-11-16 10:00 -> withdrawn
+scenario done_with_the_answer_the_stage_gave, after line 154: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave, after line 154: paused: pause by e3101 at 2026-11-16 10:00 -> refused (event)
+scenario done_with_the_answer_the_stage_gave, after line 154: an administrator: add approver at 2026-11-16 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 154: an administrator: hand over at 2026-11-16 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 154: clocks: late at 2026-11-20 00:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 154: clocks: late at 2026-11-26 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave, after line 154: clocks: late at 2026-11-19 23:59 -> refused (clock)
+scenario done_with_the_answer_the_stage_gave, after line 154: clocks: approve by e3101 at 2026-11-20 00:00 -> refused (clock)
+scenario done_with_the_answer_the_stage_gave, after line 154: sent back to the limit: send back by e3101 at 2026-11-17 10:00 -> with requester
+scenario done_with_the_answer_the_stage_gave, after line 154: sent back to the limit: resubmit by e1201 at 2026-11-18 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 154: sent back to the limit: send back by e3101 at 2026-11-18 10:00 -> refused (limit)
+scenario done_with_the_answer_the_stage_gave, after line 155: approvals: approve by e0101 at 2026-11-16 11:00 -> approved
+scenario done_with_the_answer_the_stage_gave, after line 155: rejections: reject by e0101 at 2026-11-16 11:00 -> rejected
+scenario done_with_the_answer_the_stage_gave, after line 155: the requester: approve by e1201 at 2026-11-16 11:00 -> refused (person)
+scenario done_with_the_answer_the_stage_gave, after line 155: the requester: withdraw by e1201 at 2026-11-16 11:00 -> refused (state)
+scenario done_with_the_answer_the_stage_gave, after line 155: sent back: send back by e0101 at 2026-11-16 11:00 -> with requester
+scenario done_with_the_answer_the_stage_gave, after line 155: sent back: resubmit by e1201 at 2026-11-17 11:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 155: sent back: discard by e1201 at 2026-11-16 11:00 -> withdrawn
+scenario done_with_the_answer_the_stage_gave, after line 155: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave, after line 155: sent back: send back by e0101 at 2026-11-16 11:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 155: retracted: retract by e3101 at 2026-11-16 11:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 155: clocks: late at 2026-11-20 00:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave, after line 155: clocks: late at 2026-11-26 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave, after line 156: approvals: approve by e3101 at 2026-11-16 12:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave, after line 156: rejections: reject by e3101 at 2026-11-16 12:00 -> rejected
+scenario done_with_the_answer_the_stage_gave, after line 156: the requester: approve by e1201 at 2026-11-16 12:00 -> refused (person)
+scenario done_with_the_answer_the_stage_gave, after line 156: the requester: withdraw by e1201 at 2026-11-16 12:00 -> with requester
+scenario done_with_the_answer_the_stage_gave, after line 156: sent back: send back by e3101 at 2026-11-16 12:00 -> with requester
+scenario done_with_the_answer_the_stage_gave, after line 156: sent back: resubmit by e1201 at 2026-11-17 12:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 156: sent back: discard by e1201 at 2026-11-16 12:00 -> withdrawn
+scenario done_with_the_answer_the_stage_gave, after line 156: sent back: resubmit late at 2026-11-20 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave, after line 156: sent back: send back by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 156: retracted: retract by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave, after line 156: clocks: late at 2026-11-20 00:00 -> middle, in progress
+scenario done_with_the_answer_the_stage_gave, after line 156: clocks: late at 2026-11-26 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 165: submit by e1201 at 2026-12-28 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 166: approve by e1101 at 2026-12-28 11:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 167: send back by e0101 at 2026-12-28 12:00 -> middle, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, line 168: approve by e3101 at 2026-12-28 13:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: approvals: approve by e3101 at 2026-12-28 10:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: rejections: reject by e3101 at 2026-12-28 10:00 -> rejected
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: sent back: send back by e3101 at 2026-12-28 10:00 -> with requester
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: sent back: resubmit by e1201 at 2026-12-29 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: paused: pause by e3101 at 2026-12-28 10:00 -> refused (event)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: an administrator: add approver at 2026-12-28 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: an administrator: hand over at 2026-12-28 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: clocks: late at 2027-01-07 00:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: clocks: late at 2027-01-13 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: clocks: late at 2027-01-06 23:59 -> refused (clock)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: clocks: approve by e3101 at 2027-01-07 00:00 -> refused (clock)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: sent back to the limit: send back by e3101 at 2026-12-29 10:00 -> with requester
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 165: sent back to the limit: send back by e3101 at 2026-12-30 10:00 -> refused (limit)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: approvals: approve by e0101 at 2026-12-28 11:00 -> approved
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: rejections: reject by e0101 at 2026-12-28 11:00 -> rejected
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: the requester: approve by e1201 at 2026-12-28 11:00 -> refused (person)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: the requester: withdraw by e1201 at 2026-12-28 11:00 -> refused (state)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: sent back: send back by e0101 at 2026-12-28 11:00 -> with requester
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: sent back: resubmit by e1201 at 2026-12-29 11:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: sent back: discard by e1201 at 2026-12-28 11:00 -> withdrawn
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: sent back: send back by e0101 at 2026-12-28 11:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: retracted: retract by e1101 at 2026-12-28 11:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: clocks: late at 2027-01-07 00:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 166: clocks: late at 2027-01-13 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: approvals: approve by e3101 at 2026-12-28 12:00 -> decide, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: rejections: reject by e3101 at 2026-12-28 12:00 -> rejected
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: the requester: withdraw by e1201 at 2026-12-28 12:00 -> with requester
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: sent back: send back by e3101 at 2026-12-28 12:00 -> with requester
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: sent back: resubmit by e1201 at 2026-12-29 12:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: sent back: send back by e3101 at 2026-12-28 12:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: retracted: retract by e1101 at 2026-12-28 12:00 -> first, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: clocks: late at 2027-01-07 00:00 -> middle, in progress
+scenario done_with_the_answer_the_stage_gave_after_a_proxy, after line 167: clocks: late at 2027-01-13 00:00 -> expired
+scenario made_again_after_it_was_done, line 177: send back by e0101 at 2026-11-16 12:00 -> with requester
+scenario made_again_after_it_was_done, line 178: resubmit by e1101 at 2026-11-17 10:00 -> first, in progress
+scenario made_again_after_it_was_done, line 179: approve by e3101 at 2026-11-17 11:00 -> decide, in progress
+scenario made_again_after_it_was_done, after line 178: approvals: approve by e3101 at 2026-11-17 10:00 -> decide, in progress
+scenario made_again_after_it_was_done, after line 178: rejections: reject by e3101 at 2026-11-17 10:00 -> rejected
+scenario made_again_after_it_was_done, after line 178: the requester: approve by e1101 at 2026-11-17 10:00 -> refused (person)
+scenario made_again_after_it_was_done, after line 178: the requester: withdraw by e1101 at 2026-11-17 10:00 -> with requester
+scenario made_again_after_it_was_done, after line 178: sent back: send back by e3101 at 2026-11-17 10:00 -> with requester
+scenario made_again_after_it_was_done, after line 178: sent back: resubmit by e1101 at 2026-11-18 10:00 -> first, in progress
+scenario made_again_after_it_was_done, after line 178: sent back: discard by e1101 at 2026-11-17 10:00 -> withdrawn
+scenario made_again_after_it_was_done, after line 178: sent back: resubmit late at 2026-11-21 00:00 -> expired
+scenario made_again_after_it_was_done, after line 178: clocks: late at 2026-11-21 00:00 -> first, in progress
+scenario made_again_after_it_was_done, after line 178: clocks: late at 2026-11-26 00:00 -> expired
+scenario made_again_after_it_was_done, after line 179: approvals: approve by e0101 at 2026-11-17 11:00 -> approved
+scenario made_again_after_it_was_done, after line 179: rejections: reject by e0101 at 2026-11-17 11:00 -> rejected
+scenario made_again_after_it_was_done, after line 179: the requester: approve by e1101 at 2026-11-17 11:00 -> refused (person)
+scenario made_again_after_it_was_done, after line 179: the requester: withdraw by e1101 at 2026-11-17 11:00 -> refused (state)
+scenario made_again_after_it_was_done, after line 179: sent back: send back by e0101 at 2026-11-17 11:00 -> with requester
+scenario made_again_after_it_was_done, after line 179: sent back: resubmit by e1101 at 2026-11-18 11:00 -> first, in progress
+scenario made_again_after_it_was_done, after line 179: sent back: discard by e1101 at 2026-11-17 11:00 -> withdrawn
+scenario made_again_after_it_was_done, after line 179: sent back: resubmit late at 2026-11-21 00:00 -> expired
+scenario made_again_after_it_was_done, after line 179: sent back: send back by e0101 at 2026-11-17 11:00 -> first, in progress
+scenario made_again_after_it_was_done, after line 179: retracted: retract by e3101 at 2026-11-17 11:00 -> first, in progress
+scenario made_again_after_it_was_done, after line 179: clocks: late at 2026-11-21 00:00 -> decide, in progress
+scenario made_again_after_it_was_done, after line 179: clocks: late at 2026-11-26 00:00 -> expired
+scenario taken_back_with_the_stage_it_did, line 188: retract by e3101 at 2026-11-16 12:00 -> first, in progress
+scenario taken_back_with_the_stage_it_did, line 189: approve by e3101 at 2026-11-16 13:00 -> decide, in progress
+scenario a_proxy_with_a_part_of_their_own, line 197: submit by e1201 at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, line 198: approve by e1101 at 2026-12-28 11:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, line 199: approve by e1101 at 2026-12-28 12:00 -> decide, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: approvals: approve by e1101 at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: approvals: approve by e3101 at 2026-12-28 10:00 -> decide, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: rejections: reject by e1101 at 2026-12-28 10:00 -> rejected
+scenario a_proxy_with_a_part_of_their_own, after line 197: the requester: approve by e1201 at 2026-12-28 10:00 -> refused (person)
+scenario a_proxy_with_a_part_of_their_own, after line 197: the requester: withdraw by e1201 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_with_a_part_of_their_own, after line 197: sent back: send back by e1101 at 2026-12-28 10:00 -> with requester
+scenario a_proxy_with_a_part_of_their_own, after line 197: sent back: resubmit by e1201 at 2026-12-29 10:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: sent back: discard by e1201 at 2026-12-28 10:00 -> withdrawn
+scenario a_proxy_with_a_part_of_their_own, after line 197: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_with_a_part_of_their_own, after line 197: paused: pause by e1101 at 2026-12-28 10:00 -> refused (event)
+scenario a_proxy_with_a_part_of_their_own, after line 197: an administrator: add approver at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: an administrator: hand over at 2026-12-28 10:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: clocks: late at 2027-01-07 00:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: clocks: late at 2027-01-13 00:00 -> expired
+scenario a_proxy_with_a_part_of_their_own, after line 197: clocks: late at 2027-01-06 23:59 -> refused (clock)
+scenario a_proxy_with_a_part_of_their_own, after line 197: clocks: approve by e1101 at 2027-01-07 00:00 -> refused (clock)
+scenario a_proxy_with_a_part_of_their_own, after line 197: sent back to the limit: send back by e1101 at 2026-12-29 10:00 -> with requester
+scenario a_proxy_with_a_part_of_their_own, after line 197: sent back to the limit: resubmit by e1201 at 2026-12-30 10:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 197: sent back to the limit: send back by e1101 at 2026-12-30 10:00 -> refused (limit)
+scenario a_proxy_with_a_part_of_their_own, after line 199: approvals: approve by e0101 at 2026-12-28 12:00 -> approved
+scenario a_proxy_with_a_part_of_their_own, after line 199: rejections: reject by e0101 at 2026-12-28 12:00 -> rejected
+scenario a_proxy_with_a_part_of_their_own, after line 199: the requester: approve by e1201 at 2026-12-28 12:00 -> refused (person)
+scenario a_proxy_with_a_part_of_their_own, after line 199: the requester: withdraw by e1201 at 2026-12-28 12:00 -> refused (state)
+scenario a_proxy_with_a_part_of_their_own, after line 199: sent back: send back by e0101 at 2026-12-28 12:00 -> with requester
+scenario a_proxy_with_a_part_of_their_own, after line 199: sent back: resubmit by e1201 at 2026-12-29 12:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 199: sent back: discard by e1201 at 2026-12-28 12:00 -> withdrawn
+scenario a_proxy_with_a_part_of_their_own, after line 199: sent back: resubmit late at 2027-01-07 00:00 -> expired
+scenario a_proxy_with_a_part_of_their_own, after line 199: sent back: send back by e0101 at 2026-12-28 12:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 199: retracted: retract by e1101 at 2026-12-28 12:00 -> first, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 199: clocks: late at 2027-01-07 00:00 -> decide, in progress
+scenario a_proxy_with_a_part_of_their_own, after line 199: clocks: late at 2027-01-13 00:00 -> expired
 scenario done_with_the_approval_before, after line 55: made on the revision before: approve by e3101 at 2026-11-16 11:00 -> refused (stale)
 scenario done_with_the_approval_before, after line 55: made on the revision before: reject by e3101 at 2026-11-16 11:00 -> refused (stale)
 scenario done_with_the_approval_before, after line 55: made on the revision before: send back by e3101 at 2026-11-16 11:00 -> refused (stale)

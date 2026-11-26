@@ -137,15 +137,14 @@ scenario エージェントを越えて待つ
 | 2026-11-16 10:01 | agent answered(verdict: ok) |       | 二次     | in progress |
 | 2026-11-16 12:00 | approve                     | e3101 | 決裁     | in progress |
 
-# エージェントが疑いを出す。上長はそのステップに答え、あとのステップにも答える
+# エージェントが疑いを出す。そのステップは上長に回り、上長はあとのステップにも答えるので、一次と同じくあとのステップを待つ。上長は、そこで疑いを見て一度だけ答える
 scenario エージェントが疑いを出す
   requester e1101
   form 品目 = "プロジェクター", 形 = エージェント
 | at               | event                                                  | by    | -> stage | status      |
 | 2026-11-16 10:00 | submit                                                 | e1101 | 確認     | in progress |
-| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "領収書が無い") |       | 確認     | in progress |
-| 2026-11-16 11:00 | approve                                                | e3101 | 二次     | in progress |
-| 2026-11-16 12:00 | approve                                                | e3101 | 決裁     | in progress |
+| 2026-11-16 10:01 | agent answered(verdict: doubt, reason: "領収書が無い") |       | 二次     | in progress |
+| 2026-11-16 11:00 | approve                                                | e3101 | 決裁     | in progress |
 
 # あとのステップで却下。チケットは終わり、一次は答えられないまま
 scenario あとのステップで却下

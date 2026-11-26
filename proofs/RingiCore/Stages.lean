@@ -211,10 +211,10 @@ def solved_part (spec : Spec) (who : Who) (vals : List Arg) (o : Occ) (st : Stag
     else
       { part := { p with state := .stopped }, made := [at_stage "stopped" st org [] (why ++ "; the requester " ++ who.requester ++ " is not in the organization from " ++ dateText org.version)] }
 
-/-- One part of a stage as it starts: who answers the way, or what the stage's `when empty` does with nobody, with its line of the history; an agent's way asks its flow when `ask` -/
+/-- One part of a stage as it starts: who answers the way, or what the stage's `when empty` does with nobody, with its line of the history; an agent's way asks its flow when `ask`, and else the way after `else` answers it, one person's alone as `same approver approves once` reads it -/
 def part_of (spec : Spec) (who : Who) (vals : List Arg) (o : Occ) (st : Stage) (way : String) (q : Option Quorum) (org : Org) (ask : Bool) : Parted :=
   let flow := agent_flow spec way
-  let alone := !present flow && !is_chosen spec way
+  let alone := !is_chosen spec way
   let p : Part := { way := way, key := way, approvers := [], team := none, needed := 1, answers := [], state := .active, of := none, sole := .other }
   let asked : Option Parted :=
     match flow with
@@ -446,7 +446,7 @@ def wait_at (cx : Cx) (s : Step) (i : Int) (clocks : String → Int → Int → 
 
 -- ── the stages, on: a part that waits for a later stage, decided again ──
 
-/-- A part that waits for a later stage, as the ticket comes to the stage `i`: none while that stage is still one to wait for; else it is decided again, and waits on for the last stage ahead the one who answers it now alone answers, or starts -/
+/-- A part that waits for a later stage, as the ticket comes to the stage `i`: none while that stage is still one to wait for; else it is decided again, and waits on for the last stage ahead the one who answers it now alone answers, or starts. An agent's part waits only once its agent has doubted: the way after `else` answers it, and the agent is not asked again -/
 def decide_once (cx : Cx) (who : Who) (stages : List Stage) (vals : List Arg) (pl : Place) (i : Int) (ahead : List String) (here : List String) : Except Refusal (Option Decided) := do
   match at? stages pl.stage with
   | none => pure none
@@ -469,7 +469,7 @@ def decide_once (cx : Cx) (who : Who) (stages : List Stage) (vals : List Arg) (p
         else
           let o ← occ_of cx.spec sa
           if o.ways.contains pa.way then
-            let np := part_of cx.spec who vals o sa pa.way (quorum_of o) cx.org true
+            let np := part_of cx.spec who vals o sa pa.way (quorum_of o) cx.org false
             let later : Option Wait :=
               match alone_by np.part with
               | none => none

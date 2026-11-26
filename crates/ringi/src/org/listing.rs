@@ -27,8 +27,11 @@
 //! With `same approver approves once` (DESIGN 5.12), the later of two stages one person answers is
 //! done with the approval of the stage right before it, when that person alone approved it: W506
 //! does not say the two, and says why where it does not do them (a stage between them that others
-//! answer, another part of the earlier stage, an agent's stage). Without it, W506 says how to write
-//! it where it would do them. `simulate` reads the stages it does the same way ([`before`]).
+//! answer, another part of the earlier stage, a later stage an agent answers first). An agent's
+//! stage that comes first is the one person's after `else`: they answer it when the agent doubts,
+//! and the later stage is done with that approval, or, `at the last stage`, it waits for the later
+//! one. Without the line, W506 says how to write it where it would do them. `simulate` reads the
+//! stages it does the same way ([`before`]), with each agent answering as asked.
 //!
 //! With `submitted by` (DESIGN 5.13), the requesters are the ones who may submit the request
 //! ([`super::submit`]); a team or a person it names that a version does not have is E508, a version
@@ -242,6 +245,13 @@ pub fn out_of(sv: &Solver, o: &Occ, quorum: Option<Quorum>, c: &Case) -> Out {
     if c.agent {
         return Out::Other;
     }
+    out_doubted(sv, o, quorum, c)
+}
+
+/// What a case comes to once its agent has doubted (or its flow failed): the way after `else`
+/// answers it then, read as [`out_of`] reads a person's way (DESIGN 5.12). A case with no agent is
+/// read as [`out_of`] reads it.
+pub fn out_doubted(sv: &Solver, o: &Occ, quorum: Option<Quorum>, c: &Case) -> Out {
     match &c.found {
         Found::Open => Out::Other,
         Found::People(ps) => {
@@ -284,11 +294,21 @@ pub enum Seen {
 }
 
 pub fn seen_of(sv: &Solver, o: &Occ, cases: &[(String, Option<Quorum>, Vec<Case>)]) -> Seen {
+    seen_with(sv, o, cases, out_of)
+}
+
+/// [`seen_of`], as a stage is seen once its agents have doubted: an agent's case is the way after
+/// `else`, which answers it then ([`out_doubted`]).
+pub fn seen_doubted(sv: &Solver, o: &Occ, cases: &[(String, Option<Quorum>, Vec<Case>)]) -> Seen {
+    seen_with(sv, o, cases, out_doubted)
+}
+
+fn seen_with(sv: &Solver, o: &Occ, cases: &[(String, Option<Quorum>, Vec<Case>)], out: fn(&Solver, &Occ, Option<Quorum>, &Case) -> Out) -> Seen {
     match o.spec {
         Spec::Empty | Spec::Circulate(_) => Seen::Pass,
         Spec::Note(_) | Spec::Route(_) => Seen::Other,
         _ if cases.is_empty() => Seen::Other,
-        _ => Seen::Parts(cases.iter().map(|(w, q, cs)| (w.clone(), if cs.is_empty() { vec![Out::Other] } else { cs.iter().map(|c| out_of(sv, o, *q, c)).collect() })).collect()),
+        _ => Seen::Parts(cases.iter().map(|(w, q, cs)| (w.clone(), if cs.is_empty() { vec![Out::Other] } else { cs.iter().map(|c| out(sv, o, *q, c)).collect() })).collect()),
     }
 }
 
@@ -395,12 +415,13 @@ enum Break {
 }
 
 /// Whether `same approver approves once` does the part `jb` (in its case `kb`) of the stage `ib` of
-/// the path, which `x` alone answers, where the stage `ia` comes with its part `ja` in the case `ka`,
-/// which `x` alone answers too (DESIGN 5.12): from the stage before `ib` back, every stage is passed
-/// over (it does not come, circulates, or is skipped for lack of an approver) until one that `x`
-/// alone approves, every part of it; that stage is the one it is done with. A stage line with a
-/// condition may not come; `ia` comes.
-fn carried(path: &[Occ], seen: &[Seen], cases: &[Vec<(String, Option<Quorum>, Vec<Case>)>], (ia, ja, ka): (usize, usize, usize), (ib, jb, kb): (usize, usize, usize), x: &str) -> Result<usize, Break> {
+/// the path, which `x` alone answers, where the stage `ia` comes with its part `ja`, which `x` alone
+/// answers too in the case the two are compared in (DESIGN 5.12): from the stage before `ib` back,
+/// every stage is passed over (it does not come, circulates, or is skipped for lack of an approver)
+/// until one that `x` alone approves, every part of it; that stage is the one it is done with. A
+/// stage line with a condition may not come; `ia` comes. The part of `ia` is `x`'s, an agent's too:
+/// `x` answers it when the agent doubts, and when the agent says ok, `x` answers `ib` alone, once.
+fn carried(path: &[Occ], seen: &[Seen], cases: &[Vec<(String, Option<Quorum>, Vec<Case>)>], (ia, ja, _): (usize, usize, usize), (ib, jb, kb): (usize, usize, usize), x: &str) -> Result<usize, Break> {
     if cases[ib][jb].2[kb].agent {
         return Err(Break::Agent);
     }
@@ -414,7 +435,10 @@ fn carried(path: &[Occ], seen: &[Seen], cases: &[Vec<(String, Option<Quorum>, Ve
         };
         let mut skipped = true;
         for (j, (w, outs)) in parts.iter().enumerate() {
-            let outs: &[Out] = if k == ia && j == ja { &outs[ka..=ka] } else { outs };
+            if k == ia && j == ja {
+                skipped = false;
+                continue;
+            }
             if outs.iter().any(|o| !matches!(o, Out::Pass) && !matches!(o, Out::By(p) if p == x)) {
                 return Err(if k == ia { Break::Parts(w.clone()) } else { Break::Between(k) });
             }
@@ -857,10 +881,12 @@ pub fn check(s: &Scope, usable: Option<&crate::usable::Usable>, diags: &mut Vec<
                         // what the ticket's line does to the two stages. `same approver approves
                         // once`: a later stage it does is not said, and one it does not is said with
                         // why. `, at the last stage`: the earlier stage waits for the later, and the
-                        // two are not said, unless an agent answers one of them first. Not written, or
-                        // written in the way that does not do them: how to write the one that does
+                        // two are not said, unless an agent answers the later one first. An earlier
+                        // stage an agent answers waits once its agent doubts, as it comes to the one
+                        // after `else`. Not written, or written in the way that does not do them: how
+                        // to write the one that does
                         let agent = |at: (usize, usize, usize)| cases[at.0][at.1].2[at.2].agent;
-                        let waits = !agent(a.at) && !agent(b.at);
+                        let waits = !agent(b.at);
                         // the stage the one answer is given at: the later of the two, or a later
                         // stage still that the same person alone answers
                         let at_last = if singles.iter().any(|c| c.person == a.person && c.at.0 > b.at.0 && !agent(c.at)) {
@@ -870,16 +896,13 @@ pub fn check(s: &Scope, usable: Option<&crate::usable::Usable>, diags: &mut Vec<
                         };
                         let (why, extra) = match once {
                             Once::Last if waits => continue,
-                            Once::Last => {
-                                let s = if agent(b.at) { sb } else { sa };
-                                (
-                                    format!("last agent {s}"),
-                                    vec![tr!(
-                                        "`same approver approves once, at the last stage` でも、`{sa}` は `{sb}` を待ちません。`{s}` は、エージェントが先に答えるステップです。",
-                                        "`same approver approves once, at the last stage` does not make `{sa}` wait for `{sb}`: `{s}` is a stage an agent answers first."
-                                    )],
-                                )
-                            }
+                            Once::Last => (
+                                format!("last agent {sb}"),
+                                vec![tr!(
+                                    "`same approver approves once, at the last stage` でも、`{sa}` は `{sb}` を待ちません。`{sb}` は、エージェントが先に答えるステップです。",
+                                    "`same approver approves once, at the last stage` does not make `{sa}` wait for `{sb}`: `{sb}` is a stage an agent answers first."
+                                )],
+                            ),
                             Once::Before => match carried(path, &seen, &cases, a.at, b.at, &a.person) {
                                 Ok(_) => continue,
                                 Err(e) => {

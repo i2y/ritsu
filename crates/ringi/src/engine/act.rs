@@ -753,9 +753,11 @@ impl Machine<'_, '_> {
         let mut to: Vec<String> = Vec::new();
         for (j, people, way, team) in moves {
             let p = &mut st.parts[j];
-            let agent = matches!(p.state, PartState::Agent(_));
             p.needed = if team.is_some() { p.needed.clamp(1, people.len().max(1)) } else { 1 };
-            p.sole = if people.len() == 1 && p.needed == 1 && !agent { Sole::By(people[0].clone()) } else { Sole::Other };
+            // the one it goes up to alone answers it, an agent's part too: they answer in place of
+            // the agent, and a stage right after it that they alone answer is done with that
+            // approval (DESIGN 5.12)
+            p.sole = if people.len() == 1 && p.needed == 1 { Sole::By(people[0].clone()) } else { Sole::Other };
             p.key = way.unwrap_or_else(|| p.key.clone());
             p.answers.clear();
             p.state = PartState::Open;
@@ -839,7 +841,19 @@ impl Machine<'_, '_> {
             let sv = self.solver(&rq, part);
             let ways = self.ways(o, &t.stages[i]);
             let Some((way, q, f)) = ways.get(j) else { return Err(Refusal::new("unread", tr!("ステップ `{name}` の決め方がありません", "the stage `{name}` has no such way"))) };
-            let np = self.part_of(&sv, o, &t.stages[i], way, *q, f, t, part, false, fx);
+            let mut np = self.part_of(&sv, o, &t.stages[i], way, *q, f, t, part, false, fx);
+            // `, at the last stage`: the one who answers it alone answers a stage ahead too, so it
+            // waits for the last of them, as a part does when its stage starts (not at a stage the
+            // ticket was sent back to). They see the agent's doubt there (DESIGN 5.12)
+            if listing::once(self.s.file) == Once::Last && !t.stages[i].again {
+                if let (PartState::Open, Sole::By(x)) = (&np.state, &np.sole) {
+                    if let Some(k) = self.last_of(&sv, t, i + 1, x, part) {
+                        let to = t.stages[k].name.clone();
+                        fx.record(round, Record { did: "deferred", stage: Some(name.clone()), org: Some(part.v().from), once_with: Some(to.clone()), to: vec![x.clone()], ..Record::default() });
+                        np.state = PartState::Deferred(to);
+                    }
+                }
+            }
             let to: Vec<String> = if np.state == PartState::Open { np.approvers.clone() } else { Vec::new() };
             let stopped = np.state == PartState::Stopped;
             t.stages[i].parts[j] = np;

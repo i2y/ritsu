@@ -864,7 +864,7 @@ def moved (x : Indexed Part) (moves : List Move) : Part :=
       match m.people.head? with
       | none => Sole.other
       | some a =>
-        if (m.people.length : Int) == 1 && n == 1 && p.state != .agent then Sole.by_ a
+        if (m.people.length : Int) == 1 && n == 1 then Sole.by_ a
         else Sole.other
     let key : String :=
       match m.way with
@@ -953,6 +953,13 @@ def lift (cx : Cx) (s : Step) (i : Int)
     | some st => pure { s2 with t := { with_stage s2.t i { st with remind := none, due := none } with status := .in_progress } }
   else pure s
 
+/-- `same approver approves once, at the last stage`: the part the way after `else` answers once the agent doubts waits for the last stage ahead its one person alone answers, as a part does when its stage starts; not at a stage the ticket was sent back to -/
+def after_doubt (cx : Cx) (s : Step) (i : Int) (st : Stage) (np : Parted) : Parted :=
+  if cx.spec.once == Once.last && !st.again then
+    let d := defer_own cx (who_of s.t) s.t.stages s.vals i st np.part
+    { part := d.part, made := np.made ++ d.made }
+  else np
+
 /-- The agent doubts (`why` is its reason), or its flow failed: the way after `else` answers the part -/
 def doubted (cx : Cx) (s : Step) (i : Int) (st : Stage) (o : Occ) (x : Indexed Part) (note : String)
     (why : Option String) (failed : Bool) : Except Refusal Step :=
@@ -961,7 +968,7 @@ def doubted (cx : Cx) (s : Step) (i : Int) (st : Stage) (o : Occ) (x : Indexed P
   match at? o.ways x.index with
   | none => throw (refusal .unread ("the stage `" ++ st.name ++ "` has no such way") ("ステップ `" ++ st.name ++ "` の決め方がありません"))
   | some way =>
-    let np := part_of cx.spec (who_of s1.t) s1.vals o st way (quorum_of o) cx.org false
+    let np := after_doubt cx s1 i st (part_of cx.spec (who_of s1.t) s1.vals o st way (quorum_of o) cx.org false)
     let s2 := put_all { s1 with t := with_stage s1.t i { st with parts := replace_part st.parts (max (min x.index 1000000) 0) np.part } } np.made
     let to : List String := if np.part.state == .active then np.part.approvers else []
     let s3 := tell s2 to .waiting (some st.name)

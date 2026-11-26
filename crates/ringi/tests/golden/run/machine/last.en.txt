@@ -39,10 +39,9 @@ scenario `waits_for_a_part_of_a_joint_stage`: as written (3 rows); the ticket is
 scenario `past_an_agent`: as written (3 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-18 09:00 (decide), late 2026-11-20 00:00 (decide)
 
 2026-11-16 10:00  submit                             by e1101  -> middle (flow precheck_agent), due 2026-11-19 end of day; first waits for the approval of second (e3101); ask flow precheck_agent
-2026-11-16 10:01  agent answered doubt "No receipt"            -> middle (e3101), due 2026-11-19 end of day
-2026-11-16 11:00  approve                            by e3101  -> second (e3101), due 2026-11-19 end of day
-2026-11-16 12:00  approve                            by e3101  -> decide (e0101), due 2026-11-19 end of day; first done with the approval of second (e3101)
-scenario `the_agent_doubts`: as written (4 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-18 09:00 (decide), late 2026-11-20 00:00 (decide)
+2026-11-16 10:01  agent answered doubt "No receipt"            -> second (e3101), due 2026-11-19 end of day; middle waits for the approval of second (e3101)
+2026-11-16 11:00  approve                            by e3101  -> decide (e0101), due 2026-11-19 end of day; first done with the approval of second (e3101); middle done with the approval of second (e3101)
+scenario `the_agent_doubts`: as written (3 rows); the ticket is left `in progress`; the clocks set: remind 2026-11-18 09:00 (decide), late 2026-11-20 00:00 (decide)
 
 2026-11-16 10:00  submit   by e1101  -> middle (one of e1001, e1002), due 2026-11-19 end of day; first waits for the approval of second (e3101)
 2026-11-16 11:00  approve  by e1001  -> second (e3101), due 2026-11-19 end of day
