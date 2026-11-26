@@ -270,6 +270,23 @@ impl<'s, 'a> Say<'s, 'a> {
         self.t(format!("the one the rule `{rule}` names in `{out}` ({})", or_list(&ways)), format!("規則 `{rule}` が `{out}` で選ぶ人（{}）", ways.join("、")))
     }
 
+    /// The ways a rule's output a stage names can name (`authority.decider`), by their names as the
+    /// rule's enum writes them.
+    pub fn rule_way_names(&self, p: &[Word]) -> Vec<String> {
+        let (rule, out) = match p {
+            [r, o, ..] => (r.text.as_str(), o.text.as_str()),
+            _ => return Vec::new(),
+        };
+        let Some(facts) = self.s.rule_facts(rule) else { return Vec::new() };
+        let Some(col) = facts.outputs.iter().find(|c| c.name == out || c.alias == out) else { return Vec::new() };
+        let ty = match &col.ty {
+            ritsu_ports::ColumnType::Opt(t) => t.as_ref(),
+            t => t,
+        };
+        let ritsu_ports::ColumnType::Enum { name, .. } = ty else { return Vec::new() };
+        facts.enums.iter().find(|e| &e.name == name).map(|e| e.values.iter().map(|v| v.name.clone()).collect()).unwrap_or_default()
+    }
+
     /// The ways a rule's enum output can name, by their labels.
     fn rule_ways(&self, rule: &str, out: &str) -> Vec<String> {
         let Some(facts) = self.s.rule_facts(rule) else { return Vec::new() };

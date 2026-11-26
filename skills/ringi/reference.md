@@ -1453,7 +1453,7 @@ generated: generated/requests/a2ui/functions.js
 
 | File | What it is |
 |---|---|
-| `types/<name>.json` | the kind of request: its name, version, language and titles, the days it can be used on, its UTC offset, who may submit, self approval, the organization it reads (with what a server cuts the part of it by, `needs`), the form, the stages (with the operations that ask a reason), the ways, the operations of the gate, the flows |
+| `types/<name>.json` | the kind of request: its name, version, language and titles, the days it can be used on, its UTC offset, who may submit, self approval, the organization it reads (with what a server cuts the part of it by, `needs`), the form, the stages (with the operations that ask a reason, who answers in each case the stage comes in, `approvers`, and its deadlines, `deadlines`, in the words of the page in English and Japanese), the ways (with who each chooses, `how`), the tables a late stage goes up by (`late_tables`), the operations of the gate, the flows |
 | `openapi.json` | the server's API: every event a person makes, the lists (`/waiting`, `/mine`), a ticket with its history, the organization, the masters, finding people, teams and rows, the half-filled form (`worked`); the operations that take a form carry `x-ritsu-request` |
 | `mcp/tools.json` | the tools an agent is given, and the ones it cannot undo |
 | `organization/schema.json`, `organization/columns.md`, `organization/find.jsonl` | the JSON Schema of a version's data, its columns explained, and the vectors of finding people, teams and rows |
@@ -1466,6 +1466,74 @@ A screen that sends a value it does not show is E701 (W702 where it shows it dif
 number field whose range goes past what a screen holds exactly (2^53 − 1 in the steps of its unit)
 E704; `ritsu gen` writes nothing then. A text with no label in a declared language is E703, which
 `ritsu check` says first.
+
+Two extras go with `requests`. `--extra wasm` builds the package of Rust (the crate `--target rust`
+writes) for wasm32-unknown-unknown into one module, `requests/kinds.wasm`, with `requests/wasm.json`
+saying how a server calls it, so that a server runs every kind by loading the module, with no code
+of theirs built into it. `--extra bundle` (which needs `--extra wasm`) puts `requests/` in one zip,
+`<out>/requests.zip`, with the files the kinds are made from, and with `--diff-from <the bundle
+before>` what `ringi diff` says of each kind against it:
+
+```console
+$ cd crates/ringi/examples
+$ ritsu gen leave.ringi --root . --target requests --catalog https://example.com/ritsu/catalog.json --extra wasm --extra bundle --out generated
+generated: generated/requests/types/leave.json
+…
+generated: generated/requests/wasm.json
+generated: generated/requests/bundle.json
+generated: generated/requests/kinds.wasm
+generated: generated/requests/source/leave.ringi
+generated: generated/requests/source/shared/company.gate
+generated: generated/requests/source/shared/company.ringi
+generated: generated/requests/source/shared/leave.book
+generated: generated/requests/source/shared/manager_approval.ringi
+generated: generated/requests/source/shared/office.cal
+generated: generated/requests.zip
+```
+
+Then, with the route changed to `route standard(long: days > 3)`, against that bundle:
+
+```console
+$ cd crates/ringi/examples
+$ ritsu gen leave.ringi --root . --target requests --catalog https://example.com/ritsu/catalog.json --extra wasm --extra bundle --diff-from generated/requests.zip --out next
+generated: next/requests/types/leave.json
+…
+generated: next/requests/wasm.json
+generated: next/requests/bundle.json
+generated: next/requests/diff/leave.en.md
+generated: next/requests/diff/leave.ja.md
+generated: next/requests/kinds.wasm
+generated: next/requests/source/leave.ringi
+generated: next/requests/source/shared/company.gate
+generated: next/requests/source/shared/company.ringi
+generated: next/requests/source/shared/leave.book
+generated: next/requests/source/shared/manager_approval.ringi
+generated: next/requests/source/shared/office.cal
+generated: next/requests.zip
+```
+
+`diff/leave.en.md` is the page `ringi diff` writes. Under the route, it says that the stage `head`
+now comes to the requests of 4 or 5 business days, with the approvers that moves in each version of
+the organization; under the tickets in progress, that both are version 1, and the version is to be
+raised.
+
+| File | What it is |
+|---|---|
+| `kinds.wasm` | one module of every kind: it imports nothing, and takes a line of JSON at the door of kaname (`call`), the same line the Rust list's entries make |
+| `wasm.json` | how a server calls it: the version of its shape (`wasm`), the contract, the language of its sentences, the module's SHA-256, its exports, each kind's name, version and three entries (the function, its arguments in order, whether it takes `now`), and what built it (`built`: the digest of the crate, `rustc -V`, the line of cargo) |
+| `source/` | each kind's `.ringi` and every file of a language it reads, at their paths from the root; not the organization's or the masters' data, which the server takes as a version of the organization |
+| `bundle.json` | each file of `source/` with its SHA-256, and what was compared with `--diff-from` (the SHA-256 of the zip before, and each kind's two versions, whether they differ, and the pages), or null |
+| `diff/<name>.en.md`, `diff/<name>.ja.md` | `ringi diff` of each kind the bundle before has, in English and Japanese |
+
+The module is built in a directory of its own with nothing from the network (`--offline`) and
+nothing from the environment's settings of cargo, so the same crate and the same toolchain give the
+same bytes wherever it is built; without cargo, or without the standard library of wasm32 (`rustup
+target add wasm32-unknown-unknown`), nothing is written. `--check` builds nothing: it holds
+`wasm.json` to the crate the run makes by the digest it records, and the module to `wasm.json` by its
+SHA-256, so CI checks the files with no toolchain for wasm32. What holds the module's answers is the
+vectors, which a server runs through the module it loads. The zip is written with sorted names, one
+time and no extras, so the same files give the same zip; ritsu reads only the zips it writes, and
+Python's `zipfile`, Go's `archive/zip` and `unzip -t` read them as written.
 
 ### What the server adds
 

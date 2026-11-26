@@ -356,6 +356,54 @@
       "comment_required": [
         "reject",
         "send_back"
+      ],
+      "approvers": [
+        {
+          "when": null,
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": "manager_approval"
+        }
+      ],
+      "deadlines": [
+        {
+          "kind": "due",
+          "days": 2,
+          "calendar": null,
+          "written": null,
+          "en": "It is due 2 business days after it starts, at the end of the day.",
+          "ja": "期限は、始まった日から 2 営業日の日の終わりです。"
+        },
+        {
+          "kind": "remind",
+          "days": 1,
+          "calendar": null,
+          "written": null,
+          "en": "Its approvers are reminded 1 business day after it starts, at 09:00.",
+          "ja": "始まった日から 1 営業日の日の 09:00 に、承認者へ催促が届きます。"
+        },
+        {
+          "kind": "late",
+          "days": null,
+          "calendar": null,
+          "written": "when late escalate, then expire",
+          "en": "When it is late, it goes up to the head above, and its deadline is counted again from then; when it is late again, the ticket expires.",
+          "ja": "期限を過ぎると上の長へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。"
+        },
+        {
+          "kind": "empty",
+          "days": null,
+          "calendar": null,
+          "written": "when empty escalate, then skip",
+          "en": "When nobody can answer it, it goes up to the head above; at the top of the organization, the stage is skipped.",
+          "ja": "答える人がいなければ、上の長へ回ります。組織のいちばん上では、ステップは飛ばされます。"
+        }
       ]
     },
     {
@@ -371,6 +419,57 @@
       "comment_required": [
         "reject",
         "send_back"
+      ],
+      "approvers": [
+        {
+          "when": {
+            "en": "when “Business days” is more than 5",
+            "ja": "「営業日の日数」が5より大きいとき"
+          },
+          "who": {
+            "en": "dept_head",
+            "ja": "部長"
+          },
+          "ways": [
+            "dept_head"
+          ],
+          "kind": "who",
+          "route": "manager_approval"
+        }
+      ],
+      "deadlines": [
+        {
+          "kind": "due",
+          "days": 2,
+          "calendar": null,
+          "written": null,
+          "en": "It is due 2 business days after it starts, at the end of the day.",
+          "ja": "期限は、始まった日から 2 営業日の日の終わりです。"
+        },
+        {
+          "kind": "remind",
+          "days": 1,
+          "calendar": null,
+          "written": null,
+          "en": "Its approvers are reminded 1 business day after it starts, at 09:00.",
+          "ja": "始まった日から 1 営業日の日の 09:00 に、承認者へ催促が届きます。"
+        },
+        {
+          "kind": "late",
+          "days": null,
+          "calendar": null,
+          "written": "when late escalate, then expire",
+          "en": "When it is late, it goes up to the head above, and its deadline is counted again from then; when it is late again, the ticket expires.",
+          "ja": "期限を過ぎると上の長へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。"
+        },
+        {
+          "kind": "empty",
+          "days": null,
+          "calendar": null,
+          "written": "when empty escalate, then skip",
+          "en": "When nobody can answer it, it goes up to the head above; at the top of the organization, the stage is skipped.",
+          "ja": "答える人がいなければ、上の長へ回ります。組織のいちばん上では、ステップは飛ばされます。"
+        }
       ]
     }
   ],
@@ -384,7 +483,11 @@
           "lang": "ja",
           "text": "上長"
         }
-      ]
+      ],
+      "how": {
+        "en": "the requester's manager: the head of the team the requester is mainly in, or of the team above where that head is the requester or there is none",
+        "ja": "申請者の上長。申請者が主に属するチームの長で、その長が申請者自身か空なら、上のチームの長です"
+      }
     },
     {
       "name": "dept_head",
@@ -395,9 +498,14 @@
           "lang": "ja",
           "text": "部長"
         }
-      ]
+      ],
+      "how": {
+        "en": "the head of the first team of the kind Department (`department`) above the requester",
+        "ja": "申請者から上へたどって最初の、種類が`department`のチームの長"
+      }
     }
   ],
+  "late_tables": [],
   "endings": [
     "approved",
     "rejected",

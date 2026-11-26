@@ -622,6 +622,62 @@ fn a_kind_in_the_list_says_its_language_and_its_titles() {
     assert_eq!((str_at(of("leave_ja"), &["language"]), of("leave_ja").get("labels").unwrap().compact()), ("ja", r#"[{"lang":"en","text":"Leave request"}]"#.to_string()));
 }
 
+/// Each stage of a kind says who answers it in each case it comes in, and its deadlines; each way
+/// says who it chooses; and the tables a late stage goes up by are there (DESIGN 12.2): in English
+/// and in Japanese as the page says them, with the ways, the kind of stage and the route a program
+/// reads beside, so that a server shows what changes between two versions from their descriptions.
+#[test]
+fn a_kind_says_who_answers_each_stage_and_its_deadlines() {
+    let d = docs();
+    let of = |n: &str| d.types.iter().find(|(k, _)| k == n).map(|(_, t)| t).unwrap_or_else(|| panic!("no kind {n}"));
+    let stage = |k: &str, s: &str| of(k).get("stages").and_then(Json::as_arr).unwrap().iter().find(|x| str_at(x, &["name"]) == s).cloned().unwrap_or_else(|| panic!("{k}: no stage {s}"));
+    for (name, t) in &d.types {
+        for s in t.get("stages").and_then(Json::as_arr).unwrap() {
+            let cases = s.get("approvers").and_then(Json::as_arr).unwrap_or_else(|| panic!("{name}: a stage with no `approvers`"));
+            assert!(!cases.is_empty(), "{name}: the stage {} comes in no case", str_at(s, &["name"]));
+            for c in cases {
+                let keys: Vec<&str> = c.as_obj().unwrap().iter().map(|(k, _)| k.as_str()).collect();
+                assert_eq!(keys, ["when", "who", "ways", "kind", "route"], "{name}");
+                assert!(!str_at(c, &["who", "en"]).is_empty() && !str_at(c, &["who", "ja"]).is_empty(), "{name}");
+            }
+            for l in s.get("deadlines").and_then(Json::as_arr).unwrap_or_else(|| panic!("{name}: a stage with no `deadlines`")) {
+                let keys: Vec<&str> = l.as_obj().unwrap().iter().map(|(k, _)| k.as_str()).collect();
+                assert_eq!(keys, ["kind", "days", "calendar", "written", "en", "ja"], "{name}");
+            }
+        }
+        for w in t.get("ways").and_then(Json::as_arr).unwrap() {
+            assert!(!str_at(w, &["how", "en"]).is_empty() && !str_at(w, &["how", "ja"]).is_empty(), "{name}: the way {} says not who it chooses", str_at(w, &["name"]));
+        }
+    }
+    // a stage of a route's table: each row it has, the row's columns as the condition
+    let first = stage("expense", "first");
+    let cases = first.get("approvers").and_then(Json::as_arr).unwrap();
+    assert_eq!(cases.len(), 5, "{}", first.compact());
+    assert_eq!(cases[0].compact(), r#"{"when":{"en":"when “Category” is Travel, and “Amount” is more than 100,000 JPY","ja":"「種別」が出張、かつ「合計」が100,000円より大きいとき"},"who":{"en":"manager","ja":"上長"},"ways":["manager"],"kind":"who","route":null}"#);
+    assert_eq!(str_at(&cases[4], &["who", "ja"]), "上長");
+    // two ways at once, and a stage some rows do not have
+    let second = stage("expense", "second");
+    assert_eq!(second.get("approvers").and_then(Json::as_arr).unwrap().iter().map(|c| c.get("ways").unwrap().compact()).collect::<Vec<_>>(), [r#"["dept_head"]"#, r#"["accounting"]"#, r#"["dept_head","accounting"]"#]);
+    // the deadlines of `every stage`, a late stage going up by a table
+    let lines: Vec<String> = first.get("deadlines").and_then(Json::as_arr).unwrap().iter().map(|l| format!("{} {}", str_at(l, &["kind"]), str_at(l, &["en"]))).collect();
+    assert_eq!(lines[0], "due It is due 3 business days after it starts, at the end of the day.");
+    assert_eq!(lines[2], "late When it is late, it goes up as the table `next_up` says, and its deadline is counted again from then; when it is late again, the ticket expires.");
+    let table = of("expense").get("late_tables").and_then(Json::as_arr).unwrap();
+    assert_eq!(table.len(), 1);
+    assert_eq!(str_at(&table[0], &["name"]), "next_up");
+    assert_eq!(table[0].get("ja").and_then(|j| j.get("rows")).and_then(Json::as_arr).unwrap()[2].compact(), r#"["上長","部長"]"#);
+    // a stage of a shared route: the condition the request gives the route's input, and the route
+    let head = stage("leave", "head");
+    assert_eq!(head.get("approvers").unwrap().compact(), r#"[{"when":{"en":"when “Business days” is more than 5","ja":"「営業日の日数」が5より大きいとき"},"who":{"en":"dept_head","ja":"部長"},"ways":["dept_head"],"kind":"who","route":"manager_approval"}]"#);
+    // stage lines: a condition, a quorum, a rule's output by the ways it can name, a circulation;
+    // a stage's own deadlines in place of those of `every stage`
+    let kinds: Vec<(String, String)> = of("purchase").get("stages").and_then(Json::as_arr).unwrap().iter().flat_map(|s| s.get("approvers").and_then(Json::as_arr).unwrap().iter().map(move |c| (str_at(s, &["name"]).to_string(), format!("{} {}", str_at(c, &["kind"]), c.get("ways").unwrap().compact())))).collect();
+    assert_eq!(kinds.iter().map(|(_, k)| k.as_str()).collect::<Vec<_>>(), ["who [\"manager\"]", "who [\"reviewer\"]", "who [\"finance\"]", "quorum [\"board\"]", "rule_output [\"dept_head\",\"division_head\",\"president\"]", "circulate [\"general_affairs\"]"]);
+    let board: Vec<String> = stage("purchase", "board").get("deadlines").and_then(Json::as_arr).unwrap().iter().map(|l| str_at(l, &["kind"]).to_string()).collect();
+    assert_eq!(board, ["due", "late"]);
+    assert_eq!(str_at(&of("leave").get("ways").and_then(Json::as_arr).unwrap()[1], &["how", "ja"]), "申請者から上へたどって最初の、種類が`department`のチームの長");
+}
+
 /// A kind that asks a reason with a rejection and a send-back (`comment required for`, DESIGN 7.2)
 /// says so at each of its stages (`comment_required`, the events by their names in the contract);
 /// a kind that asks none says an empty list at each. The comment of the API and the tools of the two

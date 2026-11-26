@@ -49,7 +49,7 @@ $ ritsu gen leave.ja.ringi --target requests --catalog https://example.com/ritsu
 
 | ファイル | 中身 |
 |---|---|
-| `types/<名前>.json` | 申請の種類ごとの、フォーム、ステップと答える人、人ができること、使うワークフロー |
+| `types/<名前>.json` | 申請の種類ごとの、フォーム、ステップと、場合ごとに答える人と期限、人ができること、使うワークフロー |
 | `openapi.json` | サーバーの API（OpenAPI 3.1）。種類ごとの申請の提出、だれかを待っている申請の一覧、承認、差し戻し、取り下げなど |
 | `mcp/tools.json` | 同じ操作を、エージェントのツールとして書いたもの。アシスタントが渡された書類からフォームを埋めたり、使う人を待っている申請を答えたりできます |
 | `a2ui/<名前>/` | 種類ごとの六つの画面（フォーム、承認者が答えるカード、待っている申請の一覧、申請者自身の一覧、履歴、いつから申請できるかのお知らせ）を、英語と日本語の A2UI 1.0 のテンプレートで。カタログとその関数（`a2ui/catalog.json`、`a2ui/functions.js`）も入ります |
@@ -57,6 +57,52 @@ $ ritsu gen leave.ja.ringi --target requests --catalog https://example.com/ritsu
 | `vectors/<名前>.jsonl`、`vectors/worked/<名前>.jsonl`、`organization/find.jsonl` | ベクタ |
 
 フォームの検査と計算は、生成するコード、画面の関数、参照インタプリタの三か所で動きます。三つとも、下ろした同じ規則から書いたものです。
+
+## 一つのモジュールと一つの zip
+
+サーバーは、申請のコードを自分で組まずに動かすこともできます。`--extra wasm` は、Rust のパッケージを WebAssembly の一つのモジュール `requests/kinds.wasm` に組みます。全部の申請の種類が一つのモジュールに入り、呼び方は `requests/wasm.json` に書きます。`--extra bundle` は、`requests/` と申請の種類のもとのファイルを一つの zip にまとめます。サーバーは、申請の種類の一つの版を一つのファイルで受け取れます。
+
+```console
+$ cd crates/ringi/examples
+$ ritsu gen leave.ja.ringi --root . --target requests --catalog https://example.com/ritsu/catalog.json --out generated --lang ja --extra wasm --extra bundle
+生成しました: generated/requests/types/leave_ja.json
+…
+生成しました: generated/requests/wasm.json
+生成しました: generated/requests/bundle.json
+生成しました: generated/requests/kinds.wasm
+生成しました: generated/requests/source/leave.ja.ringi
+生成しました: generated/requests/source/shared/company.gate
+生成しました: generated/requests/source/shared/company.ringi
+生成しました: generated/requests/source/shared/leave.book
+生成しました: generated/requests/source/shared/manager_approval.ringi
+生成しました: generated/requests/source/shared/office.cal
+生成しました: generated/requests.zip
+```
+
+モジュールは何も読み込みません。サーバーはこれを読み込み、`wasm.json` の SHA-256 と合うかを確かめ、申請の種類ごとの `start`、`next`、`worked` を、パッケージの入口と同じ JSON で呼びます。例のどのベクタにも、英語でも日本語でも、参照インタプリタと同じ答えを返します。組むには、Rust と `wasm32-unknown-unknown` の標準ライブラリ（`rustup target add wasm32-unknown-unknown`）が要ります。ネットワークは使いません。`--check` は組まないので、Rust を入れていない所でも回せます。
+
+`--diff-from` に前のバンドルを渡すと、zip に、変更で何が変わるかも入ります。ここでは、経路を `route 標準(long: 日数 > 3)` に変えました。
+
+```console
+$ cd crates/ringi/examples
+$ ritsu gen leave.ja.ringi --root . --target requests --catalog https://example.com/ritsu/catalog.json --out next --lang ja --extra wasm --extra bundle --diff-from generated/requests.zip
+生成しました: next/requests/types/leave_ja.json
+…
+生成しました: next/requests/wasm.json
+生成しました: next/requests/bundle.json
+生成しました: next/requests/diff/leave_ja.en.md
+生成しました: next/requests/diff/leave_ja.ja.md
+生成しました: next/requests/kinds.wasm
+生成しました: next/requests/source/leave.ja.ringi
+生成しました: next/requests/source/shared/company.gate
+生成しました: next/requests/source/shared/company.ringi
+生成しました: next/requests/source/shared/leave.book
+生成しました: next/requests/source/shared/manager_approval.ringi
+生成しました: next/requests/source/shared/office.cal
+生成しました: next/requests.zip
+```
+
+`diff/leave_ja.ja.md` と `diff/leave_ja.en.md` は `ringi diff` のページです。営業日が 4 日か 5 日の申請にステップ「部長」が来るようになること、それで組織の版ごとにどの申請者の承認者が変わるかを言います。`bundle.json` には、`source/` の下のファイルとそのダイジェスト、比べた種類と違うかどうかが入ります。
 
 ## ベクタ
 

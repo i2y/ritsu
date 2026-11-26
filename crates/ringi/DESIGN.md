@@ -2881,6 +2881,7 @@ total に書くために、機械の数は型に上限を持つ。申請の種�
 | 値を持つイベントを名前だけで | The argument `event` of `next` is "approve", and must be one of "remind", "late", "resubmit_late", "pause_ends", or an object with one key of "resubmit", "approve", …, "flow_failed" | 関数 `next` の引数 `event` が "approve" です。"remind"、"late"、"resubmit_late"、"pause_ends" のどれか、またはキーを "resubmit"、"approve"、…、"flow_failed" のどれか一つだけ持つオブジェクトが要ります |
 | イベントの中のキーが無い | The argument `event.approve.by` of `next` is missing, and must be a string | 関数 `next` の引数 `event.approve.by` がありません。文字列が要ります |
 | JSON として読めない文、値が二つの文 | The argument `submit` of `start` is not one value of JSON | 関数 `start` の引数 `submit` は、一つの JSON の値ではありません |
+| 512 段より深い入れ子（文字列の外の `[` と `{` を数える。閉じていない物も） | The argument `submit` of `start` nests deeper than 512 | 関数 `start` の引数 `submit` は、512 段より深く入れ子になっています |
 | Unicode として正しくない文字列（`"e\ud8001"`） | The argument `submit.requester` of `start` is no well-formed string of Unicode | 関数 `start` の引数 `submit.requester` は、Unicode の文字列として正しくありません |
 | 同じキーを二度書き、後の値が約束の外（`requester` を、ID のあとに 5 で） | The argument `submit.requester` of `start` is 5, and must be a string | 関数 `start` の引数 `submit.requester` が 5 です。文字列が要ります |
 | int64 の外の数（`1e30`、`9223372036854775808`、5,000 桁の整数） | The argument `ticket.round` of `next` is outside int64 | 関数 `next` の引数 `ticket.round` が int64 の外にあります |
@@ -2897,7 +2898,7 @@ total に書くために、機械の数は型に上限を持つ。申請の種�
 
 | ファイル | 中身 |
 |---|---|
-| `types/<名前>.json` | 申請の種類の説明。キーはどの種類でも同じで、無い物は null か空の配列にする。約束の版、ファイル、名前（ASCII と書いたまま）、版、書いた言語（`language`。`en` か `ja`。題と、中のどの文言（`label`）もこの言語で書き、`labels` はほかの言語で足した文言である。`labels` を書いていない方の言語で、どちらも書いていなければ、申請の名前が ASCII でない申請は `ja`、ほかは `en`。サーバーは、ページの言語の文言が無く、書いた言語のまま出す名前に、この言語の印（HTML の `lang`）を付けられる）、題と `labels`、説明、受け持つ部門、効き始める日、使える日（9.6。`ringi api` と同じ形で、決めたデータを添える）、日を読む UTC オフセット（`utc_offset_minutes`。UTC から東へ何分かの整数で、`+09:00` なら 540。7.5。サーバーはこれでイベントの日を決める）、出せる人（`submitted by` のグループと除くグループ。誰でも出せれば null）、自己承認を許すか（`self_approval`。`self approval allowed` なら true、`not allowed` か書いていなければ false。5.5。サーバーが gate にステップの `self_approval` として渡す値。12.4）、読む組織（役職を低い順に、チームの種類を広い順に、データの場所、どのイベントに渡す部分にも要る人とチーム `needs`（`people`、`teams`、`members_of`。7.5））、フォーム（規則の列挙から選ぶフィールドの選択肢は、フィールドの下の題と `labels`。4.8）、ステップ（それぞれ、理由を求める操作を約束の名前で挙げる `comment_required`。`reject`、`send_back`。求めなければ空の配列。7.2。サーバーの画面と道具は、その操作でコメントの欄を必須として見せる）、決め方（ステップと決め方は、共有の経路の物なら、題と `labels` を経路の `labels` から足す。5.11）、終わり方、人がするイベント（約束の名前。`comment` も）、承認者が直すフィールド、読むマスタ（キー、画面が行の名前を引く列（`name_field`。キーでない最初の文の列）、フィールド、データの場所）、使う flow（`flows`。下） |
+| `types/<名前>.json` | 申請の種類の説明。キーはどの種類でも同じで、無い物は null か空の配列にする。約束の版、ファイル、名前（ASCII と書いたまま）、版、書いた言語（`language`。`en` か `ja`。題と、中のどの文言（`label`）もこの言語で書き、`labels` はほかの言語で足した文言である。`labels` を書いていない方の言語で、どちらも書いていなければ、申請の名前が ASCII でない申請は `ja`、ほかは `en`。サーバーは、ページの言語の文言が無く、書いた言語のまま出す名前に、この言語の印（HTML の `lang`）を付けられる）、題と `labels`、説明、受け持つ部門、効き始める日、使える日（9.6。`ringi api` と同じ形で、決めたデータを添える）、日を読む UTC オフセット（`utc_offset_minutes`。UTC から東へ何分かの整数で、`+09:00` なら 540。7.5。サーバーはこれでイベントの日を決める）、出せる人（`submitted by` のグループと除くグループ。誰でも出せれば null）、自己承認を許すか（`self_approval`。`self approval allowed` なら true、`not allowed` か書いていなければ false。5.5。サーバーが gate にステップの `self_approval` として渡す値。12.4）、読む組織（役職を低い順に、チームの種類を広い順に、データの場所、どのイベントに渡す部分にも要る人とチーム `needs`（`people`、`teams`、`members_of`。7.5））、フォーム（規則の列挙から選ぶフィールドの選択肢は、フィールドの下の題と `labels`。4.8）、ステップ（それぞれ、理由を求める操作を約束の名前で挙げる `comment_required`。`reject`、`send_back`。求めなければ空の配列。7.2。サーバーの画面と道具は、その操作でコメントの欄を必須として見せる。だれが答えるかを場合ごとに挙げる `approvers` と、期限の行を書いた順に挙げる `deadlines`。下）、決め方（それぞれ、だれを選ぶかの文 `how`。ページの「承認者の決め方」の文を英日で。ステップと決め方は、共有の経路の物なら、題と `labels` を経路の `labels` から足す。5.11）、期限を過ぎたステップが上へ回る表（`late_tables`。表ごとに名前と、ページと同じ見出しと行を英日で）、終わり方、人がするイベント（約束の名前。`comment` も）、承認者が直すフィールド、読むマスタ（キー、画面が行の名前を引く列（`name_field`。キーでない最初の文の列）、フィールド、データの場所）、使う flow（`flows`。下） |
 | `openapi.json` | サーバーの API の OpenAPI 3.1（12.4 の表）。申請の種類ごとの操作に `x-ritsu-request`（ファイル、名前、版）を付ける。申請の種類ごとに、入口 `worked` の入力と答えのスキーマ（`<名前>.worked.in`、`<名前>.worked.out`）と、それで答える読むだけの操作（`worked_<名前>`、`ticket_worked_<名前>`）を書く（12.4）。操作ごとに、サーバーが返す答えを全部書き、断り（409）のほかのエラーの本文は共有のスキーマ `error` である（12.4）。`servers` は書かない |
 | `mcp/tools.json` | エージェントが使う道具の定義（MCP の `tools/list` の形）。道具は `openapi.json` の操作で、名前は `operationId` と同じ：申請の種類の一覧、承認待ちの一覧と自分の申請の一覧（どちらもページで。答えの `more` が次のページがあるかを言い、最後のチケットの ID を `before` にして次のページを読むと、道具の説明が言う）、チケットを見る、種類ごとの申請と、その種類が持つなら出し直しと承認者の直し、途中のフォームの答え（`worked_<名前>` と、出し直しか承認者の直しのある種類なら `ticket_worked_<名前>`。12.4）、承認、差し戻し、却下、取り下げ、差し戻されたあとの破棄、承認の取り消し、コメント、組織、マスタ、人とチームとマスタの行を探す道具（`find_people`、`find_teams`、`find_master_<マスタのファイル>_<マスタ>`。12.4、13.2）。読む道具は `readOnlyHint` を、取り下げと破棄と承認の取り消しは、戻せない操作の印（`destructiveHint`）を持つ。管理する人の操作（`pause`、`resume`、`add_approver`、`hand_over`）は道具にしない。だれが決めるかを変えるか、期限の時計を止める操作で、チケットと組織を見た人が自分で判断して行う物だからである（アシスタントに頼むのは、申請する人と承認する人の操作である）。チケットを動かす道具は、どれも人が書く文（`comment`）と操作の冪等キー（`idempotency_key`。12.4 の説明と形）を受ける。出し直しと直しの道具の説明は、値を null にしても消えないこと、空にするフィールドは `clear` に名前を挙げること、隠れたフィールドの値は名前を挙げなくても落ち、履歴の行の `cleared` に残ることを言う。申請の道具の説明は、申請の種類の説明（`description`）を含み、フィールドは文言、ほかの言語の文言、表示と必須の条件、選択の値の文言を持つ。エージェントは、道具の一覧だけを見て、資料からフォームを埋める（2 章）。入力のスキーマは参照する物を `$defs` に持ち、一つで読める |
 | `organization/schema.json`、`organization/columns.md` | 組織のデータの版の `organization.json` の JSON Schema（チームの種類と役職は宣言の名前、代理と組織の部分を `$defs` に。組織の部分の人は、ID と名前（`name`、`name_ja`）を持つ。7.5。組織が二つあれば `oneOf`）と、CSV（チーム、人、所属、代理と、各マスタ）の列の説明 |
@@ -2912,6 +2913,12 @@ total に書くために、機械の数は型に上限を持つ。申請の種�
 `reads` は、計算か条件の答えが変わりうるフォームのフィールドで、ほかの計算を通して読む物も入れ、フォームの順に一つずつ並べる（明細の行のフィールドは `items.price`）。下ろした規則が読む物のうち、答えを変える物だけである。`over is none` で、`over` が、空のことがある `left` と、いつも入れる `asked` から計算されるなら、`over` に値があるかは `left` だけで決まるので、`reads` は `left` だけになる（4.9）。隠れているフィールドは空として読むので、条件の読むフィールドが条件つきで見えるなら、その条件の読むフィールドも入る。画面が、条件と計算を、読むフィールドが決まったときに決めるのに使う（13.7）。OpenAPI と MCP の道具の説明では、条件のあるフィールドに「(worked out from `kind`)」と書き添える。
 
 使う flow（`flows`）は、一つごとに、役目（`launch`：終わったときに始める。`agent`：エージェントが答える決め方。`summary`：ステップの要約）、別名（ASCII の名前と書いたまま）、ファイル、使う所（`at`：始める終わり方、エージェントの決め方、要約のステップ）と、dandori が宣言から決める物を持つ。ワークフローの名前と版、Temporal でのワークフローの型とタスクキュー（どちらも `<名前>_v<版>`。dandori が書く物と同じ）、出力（名前、dandori の書く型、`optional`）を宣言の順に、である。サーバーは、要約の出力をこの順に並べて `note ready` に渡す（15 章）。また、flow をこの型でこのキューに始め、動かす前に、種類が使う flow のどれにもワーカーがあるかを確かめられる。キーを足しただけなので、前の約束の版のサーバーは読まずに済む（12.4）。
+
+ステップの `approvers` は、そのステップが来る場合を経路の順に挙げる。一つの場合は、来るとき（`when`。いつも来るなら null）、答える人（`who`）、名指す決め方の ASCII の名前（`ways`。規則の出力で選ぶステップは、規則の列挙が選びうる決め方）、ステップの種類（`kind`。`who`、`quorum`、`circulate`、`note`、`rule_output`）、属する共有の経路の名前（`route`。申請の種類の物なら null）を持つ。`when` と `who` は、ページの経路の表と「承認者の決め方」の言い方で、英語（`en`）と日本語（`ja`）を並べる。経路の表のステップは、それを持つ行ごとに一つの場合で、行の列の値（どれでもよい列は除く）が `when` になる。ステップを一行ずつ書いた経路は、行ごとに一つの場合で、行の条件が `when` になる。共有の経路のステップは、経路の行ごとに一つの場合で、条件の読む経路の入力を、申請の種類が渡す条件に置き換えて言う。経路を選ぶ表から通る共有の経路なら、選んだ行の値と、共有の経路の行の条件の両方を `when` に言う。
+
+`deadlines` は、そのステップの期限の行を書いた順に挙げる。ステップが自分の期限を書いていればその行で、書いていなければ `every stage` の行である（機械が読むのと同じ。共有の経路の `every stage` は、申請の種類が書いていないときに使う）。一行は、種類（`kind`。`due`、`remind`、`late`、`empty`）、期限と催促の日数とカレンダー（`days`、`calendar`。ほかの行では null）、`late` と `empty` の行の書いたままの形（`written`。`when late escalate by next_up, then expire`）、ページの「期限と催促」の文を英日で（`en`、`ja`）持つ。
+
+サーバーは、二つの版の説明のこの三つ（ステップ、決め方の `how`、`late_tables`）を比べれば、承認する人の決め方と期限が変わったかを、バンドルの中の説明だけから言える。文は英日のページと同じなので、変わった所をそのまま見せられる。機械が読むのは `ways`、`kind`、`route` と、期限の行の `kind`、`days`、`calendar`、`written` である。どちらも、組織のデータからだれになるかは言わない。その日の組織でだれが答えるかは、ページの「承認者の決め方」と同じく、ステップが始まるときに決まるからである（5.2）。
 
 ### 12.3 プロジェクト全体に書き出す物
 
@@ -3109,6 +3116,86 @@ rulec の P5 は、実行時のランタイムを持たず、読めるコード�
 - **差し替える物**：組織ごとに違う所。認証、保管、通知、添付の置き場、組織のデータの取り込み元、flow の動かし方、エージェントのステップ、監査ログの出し先。
 
 一つ目の言語は Go で、`net/http` の `http.Handler` として出す。本体は PostgreSQL だけで動き、flow を始める申請の種類があるときだけ、dandori の temporal-go の出力先を使う。flow のプラグインは別の Go のモジュールにする。二つ目からの言語と形は、Go が済んでから決める。プロジェクトの最初の一式を書き出すコマンドは ritsu の側に置く（`ritsu ringi init`、16.4）。
+
+### 12.6 Wasm とバンドル（`--extra wasm`、`--extra bundle`）
+
+`--target requests` には付属物が二つある（2026-11-26）。`--extra wasm` は、プロジェクトの Rust のパッケージ（`--target rust` が書くクレート）を wasm32-unknown-unknown に組んだ一つのモジュール `requests/kinds.wasm` と、サーバーがそれを呼ぶ形 `requests/wasm.json` を書く。サーバーは、申請の種類ごとのコードを自分に組み込まずに、このモジュールを読み込むだけで全部の種類を動かせる。`--extra bundle` は、`requests/` を一つの zip `<out>/requests.zip` にまとめる。サーバーはこれを受け取れば、組まずに申請の種類の版を入れられる。バンドルはモジュールを運ぶ物なので、`--extra bundle` には `--extra wasm` が要る。どちらも `--target requests` の付属物で、`--target requests` の無い実行と、`--extra bundle` の無い `--diff-from` は exit 2 で止まる。`ritsu.mod` には `extra` の行を作らない。付属物は、その実行で頼むかどうかを決める物だからである（根の DESIGN 9.6）。
+
+**モジュール。** 読み込む物は無い。出す物は `call`、`cabi_realloc`、`cabi_post_call`、`memory` で、kaname の door（kaname の DESIGN 36.10〜36.12）である。一回の呼び出しは、door への JSON の一行（`{"module":…,"function":…,"in":{…,"now":…}}`）で、答えは `out`、`fails`、`refused` のどれかである。door は Rust の一覧の入口（`ticket_kinds.rs` の `call`）が door に渡す物を受けるので、引数の文が一つの JSON の値か、512 段より深くないか（12.2 の表、kaname の DESIGN 16.4）は、ホストが door に渡す前に、Rust の入口と同じ順と文で確かめる。`wasm.json` は次の形である（`crates/ringi/examples` で `ritsu gen leave.ringi --root . --target requests --catalog https://example.com/ritsu/catalog.json --extra wasm` を走らせたもの。モジュールは 1,278,648 バイト）。
+
+```json
+{
+  "//": "Code generated by ritsu 0.56.0. DO NOT EDIT.",
+  "wasm": 1,
+  "contract": 3,
+  "lang": "en",
+  "file": "kinds.wasm",
+  "sha256": "ecffa70f8c5c1a8b2bcf4e33e5085480a36dc7addb7ea4dc805524c2de669730",
+  "exports": {
+    "call": "call",
+    "realloc": "cabi_realloc",
+    "post_return": "cabi_post_call",
+    "memory": "memory"
+  },
+  "kinds": [
+    {
+      "name": "leave",
+      "version": 1,
+      "module": "leave",
+      "start": {
+        "function": "start",
+        "in": [
+          "submit",
+          "organization"
+        ],
+        "now": true
+      },
+      "next": {
+        "function": "next",
+        "in": [
+          "ticket",
+          "event",
+          "organization"
+        ],
+        "now": true
+      },
+      "worked": {
+        "function": "worked_out",
+        "in": [
+          "input"
+        ],
+        "now": false
+      }
+    }
+  ],
+  "built": {
+    "source": "5357be89591a9183d64169e3bc789dfa08d283760afff82cd4ac26a3e6dba0ef",
+    "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
+    "cargo": "cargo rustc --lib --release --target wasm32-unknown-unknown --crate-type cdylib --config 'profile.release.opt-level=\"s\"' --config 'profile.release.lto=true' --config 'profile.release.panic=\"abort\"' --config 'profile.release.strip=\"symbols\"'"
+  }
+}
+```
+
+- `wasm` は `wasm.json` の形の版で、読み手は知らない版を断る。`contract` は申請の種類の一覧の約束の版（12.4）、`lang` は文を書いた言語（`--lang`）である。
+- `sha256` はモジュールのダイジェストで、サーバーは読み込む前に確かめる。
+- `kinds` は、申請の種類ごとに、名前と版、door が知るモジュールの名前、三つの入口（関数の名前、引数の名前の順、`now` を渡すか）を挙げる。フォームが何も求めない種類の `worked` は、関数を呼ばずに返す答え（`answer`）を持つ。
+- `built` は、組んだクレートのダイジェスト（ファイルと、組んだ行）、組んだ `rustc -V`、組んだ行である。
+
+**組み方。** クレートは、システムの一時ディレクトリの下の専用の場所で組み、終われば消す。cargo のホームとターゲットもそこに置き、環境の `CARGO_*`、`RUSTFLAGS`、rustc のラッパーは渡さない。マシンの設定がバイト列を変えないためである。マニフェストからは、wasm32 のほかのターゲットで使う依存（帳簿のクライアントが待つドライバー）の表を除く。残る依存は無いので、`--offline` で組め、ネットワークは使わない。モジュールが持つパスは、クレートのルートからのパス（`glue/ticket.rs`）と、ツールチェーンが名付ける標準ライブラリのパス（`/rustc/<コミット>/library/…`）だけなので、同じクレートと同じツールチェーンからは、どこで組んでも同じバイト列になる。`--target rust` を名指していなければ `<out>/rust` は書かない（書くのは名指した出力先だけ）。名指していれば、書くクレートと同じ物を組み、モジュールは名指さないときと一字も違わない（`crates/ritsu/tests/gen_requests.rs`）。cargo か rustc が無い、または wasm32-unknown-unknown の標準ライブラリが無いときは、何も書かずに exit 2 で止まり、入れ方（`https://rustup.rs`、`rustup target add wasm32-unknown-unknown`）を英日の文で言う。
+
+**`--check` は組まない。** `wasm.json` の `built.source` はクレートのダイジェスト、`sha256` はモジュールのダイジェストで、`--check` は、`built.source` がその実行の作るクレートのものであり、`sha256` がディスクのモジュールのものであれば、モジュールを書くはずの物と見る。組まないのは、組むのに cargo、rustc、wasm32 の標準ライブラリと、一分ほどの時間が要るからである。生成物を確かめるだけの CI に、それを求めない。ツールチェーンの版は確かめる物に入れない。ritsu の版がロックに入らないのと同じである（根の DESIGN 17.4）。どの rustc で組んだかは `wasm.json` が言う。そのため、モジュールを手で別の物に替え、`sha256` も合わせて書き換えた物は、`--check` では見分けられない。モジュールをソースに縛るのは組むことで、組んだモジュールの答えは、ベクタで参照インタプリタに縛る。ritsu の試験は、例の全部のベクタを英日のモジュールで回して参照インタプリタと同じ答えになることと、答えの文を一字変えたモジュールが違う答えを返すことを確かめる。サーバーの適合の試験も、読み込んだモジュールでベクタを回す。
+
+**バンドル。** zip は、その実行が `<out>/requests/` に書く全部のファイルを同じバイト列で持ち、ほかの物は持たない。`--extra bundle` は、そこに次の物を足す。
+
+- `source/<ルートからのパス>`：申請の種類の `.ringi` と、それが読む言語のファイル全部（組織とマスタの `.ringi`、共有の経路、規則、カレンダー、帳簿、flow、ゲート）。プロジェクトの索引（根の DESIGN 6.4）で、読む物が読む物までたどる。組織とマスタのデータ（CSV など）は入れない。データはサーバーが組織の版として取り込む物で、申請の種類の版には入らないからである。ルートの外のファイルを読む申請の種類は、`--root` を読むファイルが全部その下に来るディレクトリにするように言って止まる。
+- `bundle.json`：頭、形の版（`bundle`）、`source/` のファイルとそのダイジェスト（`sources`）、比べた物（`diff`。下。比べなければ null）。
+- `diff/<名前>.en.md`、`diff/<名前>.ja.md`：`--diff-from <前のバンドル>` を渡したとき、前のバンドルに同じ名前の種類があれば、その `.ringi`（前のバンドルの `source/` にある物を、それが読む物と一緒に）と今の物の `ringi diff` を、ページと同じ Markdown で英日に書く。`bundle.json` の `diff` は、前のバンドルのダイジェスト（`base`。zip ならその zip の、ディレクトリなら null）と、種類ごとの名前、前と今の版、違うか、二つのページのパスを持つ。
+
+`--diff-from` は、前の実行の `requests.zip` でも、`requests/` のディレクトリでもよい。前のソースは、ルートからの同じパスに、ディスクの上に重ねて読む（重ねなかったファイルはディスクの物を読む）。組織のデータがバンドルに無いので、ディスクの物で検査するためである。前のソースが検査を通らない種類は、その理由を言って止まる。比べられない種類を黙って落とすと、差が無いのか比べなかったのかを読む人が分けられないからである。
+
+zip は ritsu が書く（`crates/ritsu/src/package/zip.rs`）。同じファイルからは同じバイト列とダイジェストになるように、名前をバイトの順に並べ、時刻は 1980-01-01 00:00、名前は UTF-8 の印を立て、属性は 0644、拡張の欄と zip64 は持たない。圧縮は固定のハフマン符号の deflate で、小さくならなければ無圧縮で置く。読むのも ritsu の読み手で、書く形の外（ほかの道具が書いた動的なハフマン符号のブロック、暗号やデータ記述子などのフラグ、複数のディスク、コメント、拡張の欄、4 GiB を越える物、`..` や絶対パスの名前）は英日の文で断る。ほかの実装が読めることは、例のバンドルと、空のファイル、大きなファイル（無圧縮で置く物と圧縮する物）、日本語の名前の zip を、Python の `zipfile`、Go の `archive/zip`、`unzip -t` で読み、中身が一字も同じことで確かめる（`crates/ritsu/tests/gen_requests.rs`）。zip のライブラリを依存に足さないのは、決まったバイト列を書くには、どのみち書き方の全部を決める必要があるからである。
+
+`--check` は、ほかのファイルと同じく、バンドルのファイルと `requests.zip` を、その実行が書くはずの物と比べる。頼まなくなった `--extra` のファイル（`kinds.wasm`、`wasm.json`、`requests.zip`、`bundle.json`、`source/`、`diff/`）は、ほかの付属物と同じく、消さずに挙げ、終了コードを変えない（根の DESIGN 9.6）。
 
 ## 13. 画面
 

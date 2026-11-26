@@ -63,7 +63,7 @@ generated: generated/requests/a2ui/functions.js
 
 | File | What it is |
 |---|---|
-| `types/<name>.json` | each request type: its form, its stages and who answers them, what people may do, the flows it uses |
+| `types/<name>.json` | each request type: its form, its stages, who answers them in each case and their deadlines, what people may do, the flows it uses |
 | `openapi.json` | the server's API, in OpenAPI 3.1: submitting each kind, the lists of what waits for someone, approving, sending back, withdrawing, and the rest |
 | `mcp/tools.json` | the same operations as the tools of an agent, so an assistant can fill a form from the papers it is given, or answer what waits for its user |
 | `a2ui/<name>/` | six screens of each kind (the form, the card an approver answers, the list of what waits, the requester's own list, the history, and the notice of the day a request may be made from), in English and in Japanese, as A2UI 1.0 templates, with their catalog and its functions (`a2ui/catalog.json`, `a2ui/functions.js`) |
@@ -72,6 +72,64 @@ generated: generated/requests/a2ui/functions.js
 
 The form's checks and computations run in three places: in the generated code, in the screen's
 functions, and in the reference interpreter. All three are written from the same lowered rules.
+
+## One module and one zip
+
+A server can run the requests without building their code. `--extra wasm` builds the package of
+Rust into one module of WebAssembly, `requests/kinds.wasm`, which holds every kind of request, with
+`requests/wasm.json` saying how to call it. `--extra bundle` puts `requests/` in one zip with the
+files the kinds are made from, so that a server takes a version of the requests as one file:
+
+```console
+$ cd crates/ringi/examples
+$ ritsu gen leave.ringi --root . --target requests --catalog https://example.com/ritsu/catalog.json --extra wasm --extra bundle --out generated
+generated: generated/requests/types/leave.json
+…
+generated: generated/requests/wasm.json
+generated: generated/requests/bundle.json
+generated: generated/requests/kinds.wasm
+generated: generated/requests/source/leave.ringi
+generated: generated/requests/source/shared/company.gate
+generated: generated/requests/source/shared/company.ringi
+generated: generated/requests/source/shared/leave.book
+generated: generated/requests/source/shared/manager_approval.ringi
+generated: generated/requests/source/shared/office.cal
+generated: generated/requests.zip
+```
+
+The module imports nothing. A server loads it, checks it against the SHA-256 in `wasm.json`, and
+calls each kind's `start`, `next` and `worked` through it, with the same JSON as the packages'
+entries take. It answers every vector of the examples as the reference interpreter does, in English
+and in Japanese. Building it needs Rust with the standard library of
+`wasm32-unknown-unknown` (`rustup target add wasm32-unknown-unknown`), and nothing from the network;
+`--check` builds nothing, so it runs where Rust is not installed.
+
+With `--diff-from` and the bundle before, the zip also says what a change does. Here the route is
+changed to `route standard(long: days > 3)`:
+
+```console
+$ cd crates/ringi/examples
+$ ritsu gen leave.ringi --root . --target requests --catalog https://example.com/ritsu/catalog.json --extra wasm --extra bundle --diff-from generated/requests.zip --out next
+generated: next/requests/types/leave.json
+…
+generated: next/requests/wasm.json
+generated: next/requests/bundle.json
+generated: next/requests/diff/leave.en.md
+generated: next/requests/diff/leave.ja.md
+generated: next/requests/kinds.wasm
+generated: next/requests/source/leave.ringi
+generated: next/requests/source/shared/company.gate
+generated: next/requests/source/shared/company.ringi
+generated: next/requests/source/shared/leave.book
+generated: next/requests/source/shared/manager_approval.ringi
+generated: next/requests/source/shared/office.cal
+generated: next/requests.zip
+```
+
+`diff/leave.en.md` and `diff/leave.ja.md` are the pages of `ringi diff`: the stage `head` now
+comes to the requests of 4 or 5 business days, and which requesters' approvers that moves in each
+version of the organization. `bundle.json` lists the files under `source/` with their digests, and
+which kinds were compared and whether they differ.
 
 ## The vectors
 

@@ -246,8 +246,8 @@ pub fn commands() -> Vec<Cmd> {
         name: "gen",
         args: "[<path>...]",
         purpose: tr!(
-            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、Functional Core（kaname のモジュール）、ゲートに尋ねるコードを、指定した言語（TypeScript、Python、Go、Rust）ごとに一つのパッケージにする。ワークフローと Functional Core とゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。Rust のパッケージは一つのクレートで、ワークフローとゲートのコードを入れず（入らないファイルを警告で言う）、Functional Core があれば Wasm の二つのファイルも持つ。cedar を指定すれば、ゲートの Cedar を <out>/cedar/ に一度だけ書く。lean を指定すれば、kaname のモジュールの定義と性質の文を Lean にして <out>/lean/ に一度だけ書く（.kn の隣の証明を、その場所のまま読む lakefile と一緒に）",
-            "write the rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project as one package for each language given (TypeScript, Python, Go, Rust), whose workflows, functional cores and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units). A package of Rust is one crate, with no workflow and no gate's code (a warning names the files it leaves out), and with the two files of its Wasm when it has functional cores; given cedar, the gates' Cedar goes once into <out>/cedar/; given lean, the definitions of kaname's modules and the statements of their properties go once into <out>/lean/ as Lean, with a lakefile that reads the proofs beside the .kn files where they are"
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、Functional Core（kaname のモジュール）、ゲートに尋ねるコードを、指定した言語（TypeScript、Python、Go、Rust）ごとに一つのパッケージにする。ワークフローと Functional Core とゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。Rust のパッケージは一つのクレートで、ワークフローとゲートのコードを入れず（入らないファイルを警告で言う）、Functional Core があれば Wasm の二つのファイルも持つ。cedar を指定すれば、ゲートの Cedar を <out>/cedar/ に一度だけ書く。lean を指定すれば、kaname のモジュールの定義と性質の文を Lean にして <out>/lean/ に一度だけ書く（.kn の隣の証明を、その場所のまま読む lakefile と一緒に）。requests に --extra wasm を付ければ、Rust のパッケージを Wasm に組んで <out>/requests/kinds.wasm と呼び方（wasm.json）を書き、--extra bundle を付ければ、<out>/requests/ の全部と申請の種類の元のファイルを一つの zip（<out>/requests.zip）にする",
+            "write the rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project as one package for each language given (TypeScript, Python, Go, Rust), whose workflows, functional cores and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units). A package of Rust is one crate, with no workflow and no gate's code (a warning names the files it leaves out), and with the two files of its Wasm when it has functional cores; given cedar, the gates' Cedar goes once into <out>/cedar/; given lean, the definitions of kaname's modules and the statements of their properties go once into <out>/lean/ as Lean, with a lakefile that reads the proofs beside the .kn files where they are; given --extra wasm with requests, the package of Rust is built as Wasm into <out>/requests/kinds.wasm, with how it is called (wasm.json), and given --extra bundle, all of <out>/requests/ and the files the kinds of request are made from go into one zip, <out>/requests.zip"
         ),
         params: vec![(
             "<path>...",
@@ -266,6 +266,16 @@ pub fn commands() -> Vec<Cmd> {
                 ),
             )
             .choices(&ritsu_base::modules::manifest::TARGET_WORDS)
+            .once_each(),
+            flag(
+                "--extra",
+                Some("<extra>"),
+                tr!(
+                    "--target requests に足すもの（ringi の DESIGN 12.6）。wasm は、Rust のパッケージを wasm32-unknown-unknown に組んだモジュールを requests/kinds.wasm に、サーバーがそれを呼ぶ形を requests/wasm.json に書く（cargo と wasm32 の標準ライブラリが要り、ネットワークは使わない。--target rust が無ければ、クレートは一時の場所で組み、<out>/rust は書かない。--check は組まずに、元のファイルの要約と kinds.wasm の SHA-256 を wasm.json と比べる）。bundle は、requests/ の全部と、申請の種類の元のファイル（requests/source/）を、同じ入力から同じバイトの zip（<out>/requests.zip）にする（wasm が要る）",
+                    "what to add to --target requests (ringi's DESIGN 12.6): wasm builds the package of Rust for wasm32-unknown-unknown into requests/kinds.wasm, and writes how a server calls it into requests/wasm.json (it needs cargo and the standard library of wasm32, and uses no network; without --target rust the crate is built in a place of its own and <out>/rust is not written; under --check nothing is built, and the digest of the sources and the SHA-256 of kinds.wasm are compared with wasm.json); bundle puts all of requests/ and the files the kinds of request are made from (requests/source/) into one zip, <out>/requests.zip, the same bytes from the same input (it needs wasm)"
+                ),
+            )
+            .choices(&crate::package::EXTRA_WORDS)
             .once_each(),
             flag("--out", Some("<dir>"), tr!("パッケージを書く先。言語ごとに <dir>/<language>、cedar、lean、requests は <dir>/<target> に書く", "where the packages go: each in <dir>/<language>, and cedar, lean and requests in <dir>/<target>")).default("generated"),
             flag("--check", None, tr!("書かずに、パッケージが古ければ 1 で落ちる（CI 用）", "write nothing, and exit 1 if a package is stale (for CI)")),
@@ -300,6 +310,14 @@ pub fn commands() -> Vec<Cmd> {
                 ),
             ),
             flag(
+                "--diff-from",
+                Some("<bundle>"),
+                tr!(
+                    "--extra bundle で、比べる前のバンドル（ritsu が書いた requests.zip か、その中身のディレクトリ）。同じ名前の申請の種類ごとに、ringi diff の答えを英語と日本語の Markdown にして requests/diff/ に入れ、bundle.json に並べる",
+                    "with --extra bundle, the bundle before, to compare with (a requests.zip ritsu wrote, or a directory of what one holds): for each kind of request of the same name, what ringi diff says goes into requests/diff/ as Markdown in English and in Japanese, listed in bundle.json"
+                ),
+            ),
+            flag(
                 "--library",
                 None,
                 tr!(
@@ -329,8 +347,8 @@ pub fn commands() -> Vec<Cmd> {
                 ),
             ),
             (2, tr!(
-                "引数の誤り（--target も ritsu.mod の target の行も無い、も含む）、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール、--library で、どのライブラリも持たず --embed にも無い依存か、Rust の出力先",
-                "bad arguments (neither --target nor a target line in ritsu.mod, among them), a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, a module that needs a newer ritsu, or under --library a dependency no library holds that --embed does not name, or the target rust"
+                "引数の誤り（--target も ritsu.mod の target の行も無い、も含む）、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール、--library で、どのライブラリも持たず --embed にも無い依存か、Rust の出力先、--extra で、--target requests が無い、bundle に wasm が無い、cargo か wasm32 の標準ライブラリが無い、読めないバンドルか、比べられない申請の種類",
+                "bad arguments (neither --target nor a target line in ritsu.mod, among them), a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, a module that needs a newer ritsu, under --library a dependency no library holds that --embed does not name, or the target rust, or under --extra no --target requests, bundle with no wasm, no cargo or no standard library of wasm32, a bundle that cannot be read, or a kind of request that cannot be compared"
             )),
         ],
         examples: vec![
@@ -341,6 +359,8 @@ pub fn commands() -> Vec<Cmd> {
             "ritsu gen --target go --check --format json",
             "ritsu gen --check",
             "ritsu gen --library --target python --embed tax",
+            "ritsu gen --target requests --extra wasm",
+            "ritsu gen --target requests --extra wasm --extra bundle --diff-from old/requests.zip",
         ],
         codes: vec![],
     });

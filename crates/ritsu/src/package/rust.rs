@@ -30,6 +30,11 @@ use std::rc::Rc;
 const EDITION: &str = "2024";
 const RUST_VERSION: &str = "1.94";
 
+/// The header of the table of what the crate depends on for every target but wasm32: the crates of
+/// the books' clients, which the Wasm leaves out with the clients (`--extra wasm` builds it without
+/// the table, [`super::wasm`]).
+pub const NOT_WASM32: &str = "[target.'cfg(not(target_arch = \"wasm32\"))'.dependencies]";
+
 /// What no file of a directory's parts can be the module of: Rust reads `mod.rs` as the directory's own
 /// file, beside the `rules.rs` that declares it (E0761). The others that no raw identifier writes are
 /// declared with their paths ([`ritsu_emit::package::rust_mod_line`]).
@@ -174,7 +179,7 @@ fn manifest(o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec<String>>>, wh
     let wasm = if all.values().any(|k| k.contains_key("glue")) { format!("#\n# Its Wasm, which answers through kaname's modules:\n#   {}\n", ritsu_emit::wasm::CARGO_LINE) } else { String::new() };
     let mut s = format!("{head}# {what}\n{wasm}\n[package]\nname = {}\nversion = \"0.0.0\"\nedition = \"{EDITION}\"\nrust-version = \"{RUST_VERSION}\"\npublish = false\n\n[lib]\npath = \"lib.rs\"\n", ritsu_emit::lit::json(&o.name));
     if all.values().any(|k| k.contains_key("books")) {
-        s.push_str("\n[target.'cfg(not(target_arch = \"wasm32\"))'.dependencies]\n");
+        s.push_str(&format!("\n{NOT_WASM32}\n"));
         for c in chobo::client::rust::crates(o.books.chobo(super::Target::Rust).backend()) {
             let exact = format!("\"={}\"", c.version.trim_start_matches('='));
             s.push_str(&format!("{}\n", c.line().replacen(&format!("\"{}\"", c.version), &exact, 1)));

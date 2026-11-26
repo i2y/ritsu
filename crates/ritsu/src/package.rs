@@ -63,10 +63,14 @@
 //! submodule [`library`]): named and versioned by the module's `ritsu.mod`, with what it depends on
 //! as ranges, reading the parts of a dependency that is a library from that library.
 
+mod bundle;
 mod kinds;
 mod laid;
 mod library;
 mod rust;
+mod wasm;
+/// Public so that the tests read what it writes with other readers of zip.
+pub mod zip;
 
 use crate::cli;
 use ritsu_base::diag::Severity;
@@ -146,6 +150,13 @@ pub const LEAN: &str = "lean";
 /// catalog and functions (`a2ui/`, ringi's DESIGN 13). The kinds are the requests whose code the
 /// packages hold.
 pub const REQUESTS: &str = "requests";
+
+/// The extras `--extra` takes, beside `--target requests` (ringi's DESIGN 12.6), in the order they
+/// are written whatever the order they are given in: `wasm`, the package of Rust built for
+/// wasm32-unknown-unknown into `<out>/requests/kinds.wasm`, with `wasm.json`, how a server calls it;
+/// `bundle`, every file of `<out>/requests/` with the files the kinds are made from in one zip,
+/// `<out>/requests.zip`, which needs `wasm`.
+pub const EXTRA_WORDS: [&str; 2] = ["wasm", "bundle"];
 
 /// The names `--target` takes, in the order `ritsu gen` writes them whatever the order they are
 /// given in (DESIGN 9.6): each language's, in [`Target::ALL`]'s order, then `cedar`, `lean` and
@@ -292,6 +303,13 @@ const GO_RAISED: &[(&str, &str, &str, &str, &str)] = &[("github.com/jackc/pgx/v5
 /// is made from (None for what the package itself is made of: the index and the manifest).
 pub struct Package {
     pub files: Vec<(String, String, Option<String>)>,
+    /// The files that are no text (the module of `--extra wasm`, the zip of `--extra bundle`), the
+    /// same way; under `--check`, None for a file that is not what the run writes, whatever is there
+    /// (a module that is not the build of the crate the run makes).
+    pub bytes: Vec<(String, Option<Vec<u8>>, Option<String>)>,
+    /// Whether its files are written into a directory other targets write into too (`<out>/` for
+    /// the zip of `--extra bundle`): nothing else there is taken away.
+    pub alone: bool,
 }
 
 /// Why nothing is generated: what the text prints (on the standard error), the exit code, and for
@@ -880,7 +898,7 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
         ));
     }
     files.extend(around(target, o, &kinds, &files));
-    Ok(Package { files })
+    Ok(Package { files, bytes: Vec::new(), alone: false })
 }
 
 /// What stops the packages of a module for the modules' sake, made sure of once, before any target
@@ -1078,7 +1096,7 @@ pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Aut
             files.push((format!("{}{}", place.dir, rel.strip_prefix("cedar/").unwrap_or(&rel)), body, Some(f.rel.clone())));
         }
     }
-    Ok((Package { files }, said, warned))
+    Ok((Package { files, bytes: Vec::new(), alone: false }, said, warned))
 }
 
 /// The name a module goes by in an index: its file's name without the extension, or a package's
@@ -1454,6 +1472,8 @@ struct Emitted {
     /// The files an earlier run wrote for a target this one is not given (`<out>/cedar/`): said,
     /// and left as they are, under `--check` too (DESIGN 9.6).
     unasked: Vec<String>,
+    /// And those an earlier run wrote for an extra of `requests` this one is not given (`--extra`).
+    unasked_extras: Vec<String>,
     files: Vec<Emit>,
 }
 
@@ -1521,7 +1541,7 @@ fn written_once(p: &Package, target: &str, lang: Lang) -> Result<(), Refusal> {
     // each path in lower case, and each directory of Go's, with the first file that writes it
     let mut by: BTreeMap<String, (&str, &Option<String>)> = BTreeMap::new();
     let mut dirs: BTreeMap<&str, (&str, &Option<String>)> = BTreeMap::new();
-    for (rel, _, from) in &p.files {
+    for (rel, from) in p.files.iter().map(|(r, _, f)| (r, f)).chain(p.bytes.iter().map(|(r, _, f)| (r, f))) {
         if let Some(prev) = by.insert(rel.to_lowercase(), (rel.as_str(), from)) {
             return Err(refusal(2, twice(target, prev, (rel.as_str(), from), None), lang));
         }
@@ -1599,14 +1619,14 @@ fn lean(project: &Project, modules: &[(Rc<kaname::check::Checked>, String)], dir
     let checked: Vec<Rc<kaname::check::Checked>> = modules.iter().map(|(c, _)| c.clone()).collect();
     let layout = lean::Layout::InPlace { out: dir.to_path_buf(), proofs: lean::proofs_beside(&checked) };
     let (files, _) = lean::package_from(&named, &layout);
-    Package { files: files.into_iter().map(|(p, text, from)| (p.to_string_lossy().replace('\\', "/"), text, from)).collect() }
+    Package { files: files.into_iter().map(|(p, text, from)| (p.to_string_lossy().replace('\\', "/"), text, from)).collect(), bytes: Vec::new(), alone: false }
 }
 
 /// What `--target requests` writes for the project's kinds of request (ringi's DESIGN 12.2): the
 /// requests whose code the packages hold, each described by ringi; nothing when there is none.
 fn requests(project: &Project, joined: &Joined, laid: &ritsu_project::requests::Laid, screens: Option<&ringi::screens::Given>, lang: Lang) -> Result<Package, Refusal> {
     let files: Vec<PathBuf> = laid.kinds.iter().map(|k| PathBuf::from(&k.request.shown)).collect();
-    joined.ringi.requests_with(&files, &project.root, screens).map(|files| Package { files }).map_err(|e| {
+    joined.ringi.requests_with(&files, &project.root, screens).map(|files| Package { files, bytes: Vec::new(), alone: false }).map_err(|e| {
         let (why_ja, why_en) = (e.ja, e.en);
         refusal(2, tr!("申請の種類を書き出せません（{why_ja}）。ringi の不具合です", "cannot describe the kinds of request ({why_en}): a bug in ringi"), lang)
     })
@@ -1657,14 +1677,18 @@ fn generated_here(p: &Path) -> bool {
         || (p.file_name().is_some_and(|n| n == "package.json") && lines.get(3).and_then(|l| string(l, "description")).is_some_and(head))
 }
 
-/// Write the package into `dir`, or under `check` say what differs from it.
-fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: bool, st: &mut Emitted, lang: Lang) -> Result<(), Refusal> {
-    let planned: BTreeSet<PathBuf> = p.files.iter().map(|(rel, _, _)| dir.join(rel)).collect();
-    for (rel, body, from) in &p.files {
+/// Write the package into `dir`, or under `check` say what differs from it. For `requests`,
+/// `extras` are the extras the run is given (`--extra`): the files an earlier run wrote for one it
+/// is not given are said, and left as they are ([`bundle::written_before`]).
+fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: bool, extras: &[&str], st: &mut Emitted, lang: Lang) -> Result<(), Refusal> {
+    let all: Vec<(&String, Option<&[u8]>, &Option<String>)> =
+        p.files.iter().map(|(rel, body, from)| (rel, Some(body.as_bytes()), from)).chain(p.bytes.iter().map(|(rel, body, from)| (rel, body.as_deref(), from))).collect();
+    let planned: BTreeSet<PathBuf> = all.iter().map(|(rel, _, _)| dir.join(rel)).collect();
+    for (rel, body, from) in all {
         let path = dir.join(rel);
         let shown = path.display().to_string();
         let existing = std::fs::read(&path).ok();
-        if existing.as_deref() == Some(body.as_bytes()) {
+        if body.is_some() && existing.as_deref() == body {
             st.note(target, &shown, from, "same");
             continue;
         }
@@ -1678,6 +1702,9 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
             }
             continue;
         }
+        let Some(body) = body else {
+            return Err(refusal(2, tr!("{shown} の中身を作らずに書こうとしました。ritsu の不具合です。報告してください", "{shown} is written with nothing made for it: a bug in ritsu, please report it"), lang));
+        };
         if let Some(parent) = path.parent()
             && let Err(e) = ritsu_base::fs::create_dir_all(parent)
         {
@@ -1688,6 +1715,9 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
         }
         st.note(target, &shown, from, "written");
         st.written.push(shown);
+    }
+    if p.alone {
+        return Ok(());
     }
     let mut left = leftovers(dir, &planned, library);
     if target == REQUESTS {
@@ -1700,7 +1730,23 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
             .filter(|v| v.is_file() && !planned.contains(v))
             .collect();
         left.extend(theirs);
+        // the files an extra wrote before: those of an extra the run is not given are said and left
+        // as they are (DESIGN 9.6), as the Cedar of a target not given is; of one it is given, the
+        // files `bundle.json` listed that the run does not write go, as a kind's vectors do
+        let zip = dir.parent().map_or_else(|| PathBuf::from(bundle::ZIP), |d| d.join(bundle::ZIP));
+        let before = bundle::written_before(dir, &zip);
+        let unasked: BTreeSet<&PathBuf> = before.iter().filter(|(x, _)| !extras.contains(x)).map(|(_, p)| p).collect();
+        left.retain(|p| !unasked.contains(p));
+        if extras.contains(&"bundle") {
+            left.extend(bundle::listed(&dir.join(bundle::ABOUT)).into_iter().map(|rel| dir.join(rel)).filter(|p| p.is_file() && !planned.contains(p)));
+        }
+        for p in unasked {
+            let shown = p.display().to_string();
+            st.note(target, &shown, &None, "left");
+            st.unasked_extras.push(shown);
+        }
         left.sort();
+        left.dedup();
     }
     for p in left {
         let shown = p.display().to_string();
@@ -1711,11 +1757,19 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: boo
             st.note(target, &shown, &None, "removed");
             st.removed.push(shown);
             // the screens of a kind no longer given have a directory of their own
-            // (`a2ui/<name>/`): it goes with its last file
-            if target == REQUESTS
-                && let Some(parent) = p.parent().filter(|d| d.parent() == Some(dir.join("a2ui").as_path()))
-            {
-                let _ = std::fs::remove_dir(parent);
+            // (`a2ui/<name>/`): it goes with its last file; so do the directories of `source/` and
+            // `diff/` a file no longer listed leaves empty
+            if target == REQUESTS {
+                if let Some(parent) = p.parent().filter(|d| d.parent() == Some(dir.join("a2ui").as_path())) {
+                    let _ = std::fs::remove_dir(parent);
+                }
+                let mut up = p.parent();
+                while let Some(d) = up.filter(|d| d.starts_with(dir.join(bundle::SOURCE)) || d.starts_with(dir.join(bundle::DIFF))) {
+                    if std::fs::remove_dir(d).is_err() {
+                        break;
+                    }
+                    up = d.parent();
+                }
             }
         }
     }
@@ -1740,6 +1794,8 @@ struct Answer {
     check: bool,
     out: String,
     targets: Vec<&'static str>,
+    /// The extras asked for (`--extra`), in the order of [`EXTRA_WORDS`].
+    extras: Vec<&'static str>,
     files: Vec<Emit>,
     diagnostics: Vec<Json>,
     error: Option<(u8, String)>,
@@ -1776,6 +1832,7 @@ impl Answer {
             ("check", Json::Bool(self.check)),
             ("out", Json::str(&self.out)),
             ("targets", Json::arr(self.targets.iter().map(|t| Json::str(*t)))),
+            ("extras", Json::arr(self.extras.iter().map(|t| Json::str(*t)))),
             ("files", Json::arr(self.files.iter().map(file))),
             ("diagnostics", Json::arr(self.diagnostics.iter().cloned())),
             ("error", error),
@@ -1807,7 +1864,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     // what the packages say is in `--lang`, else English, whatever the environment says (DESIGN 4.1)
     let made = Lang::made(asked.as_deref());
     let json = asks_json(args);
-    let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
+    let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), extras: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
     let code = run_of(args, &table, cmd, lang, made, json, &mut answer);
     if json && !answer.silent {
         println!("{}", answer.json(code).pretty());
@@ -1837,7 +1894,7 @@ pub fn fresh(root: &Path, lang: Lang) -> Fresh {
     let at = root.to_string_lossy().into_owned();
     let out = root.join("generated").to_string_lossy().into_owned();
     let args: Vec<String> = vec![at.clone(), "--root".into(), at, "--check".into(), "--out".into(), out.clone(), "--format".into(), "json".into()];
-    let mut answer = Answer { root: None, check: true, out, targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
+    let mut answer = Answer { root: None, check: true, out, targets: Vec::new(), extras: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
     let code = run_of(&args, &table, cmd, lang, made, true, &mut answer);
     match (code, answer.error) {
         (0, _) => Fresh::Same,
@@ -1888,7 +1945,7 @@ pub(crate) fn quietly(args: &[String], lang: Lang) -> Result<(), Text> {
     // [`command`]
     let asked = Lang::flag_of(args);
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
-    let mut answer = Answer { root: None, check: false, out: String::new(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
+    let mut answer = Answer { root: None, check: false, out: String::new(), targets: Vec::new(), extras: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
     match (run_of(args, &table, cmd, lang, Lang::made(asked.as_deref()), true, &mut answer), answer.error) {
         (0, _) => Ok(()),
         (_, Some((_, why))) => Err(Text::same(why)),
@@ -2053,6 +2110,29 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     let cedar_given = names.contains(&CEDAR);
     let lean_given = names.contains(&LEAN);
     let requests_given = names.contains(&REQUESTS);
+    // the extras of `requests` (ringi's DESIGN 12.6), in the order of [`EXTRA_WORDS`]
+    let extras: Vec<&'static str> = EXTRA_WORDS.into_iter().filter(|e| a.all("--extra").contains(e)).collect();
+    answer.extras = extras.clone();
+    if let Some(e) = extras.first().filter(|_| !requests_given) {
+        return say(refusal(2, tr!("`--extra {e}` は `requests` の付属物です。`--target requests` がありません", "`--extra {e}` is an extra of `requests`, and there is no `--target requests`"), lang), answer);
+    }
+    if extras.contains(&"bundle") && !extras.contains(&"wasm") {
+        return say(
+            refusal(
+                2,
+                tr!(
+                    "`--extra bundle` には `--extra wasm` が要ります。バンドルは、サーバーが組み直さずに読み込む Wasm を運ぶ物です",
+                    "`--extra bundle` needs `--extra wasm`: a bundle carries the Wasm a server loads with no build of its own"
+                ),
+                lang,
+            ),
+            answer,
+        );
+    }
+    let diff_from = a.get("--diff-from").map(str::to_string);
+    if diff_from.is_some() && !extras.contains(&"bundle") {
+        return say(refusal(2, tr!("`--diff-from` は `--extra bundle` と一緒に使います", "`--diff-from` goes with `--extra bundle`"), lang), answer);
+    }
     // the screens' catalog (ringi's DESIGN 13.2): its ID is a name for the project's catalog, written
     // as a URL the project owns, the same in every environment, which only the project knows:
     // `--catalog`'s, else the `catalog` line of the module's ritsu.mod; with neither, `requests`
@@ -2215,11 +2295,96 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     // the kinds of request apart from any language, once beside the packages, when `requests` is
     // given (ringi's DESIGN 12.2)
     if requests_given {
-        let p = match over(&laid, &api, || requests(&project, &joined, &laid, screens.as_ref(), lang)) {
+        let mut p = match over(&laid, &api, || requests(&project, &joined, &laid, screens.as_ref(), lang)) {
             Ok(p) => p,
             Err(r) => return say(r, answer),
         };
-        made.push((out.join(REQUESTS), REQUESTS, p, false));
+        // the extras (ringi's DESIGN 12.6): the module of the package of Rust and how it is called,
+        // then the files the kinds are made from, with what changed, and the zip of it all
+        if extras.contains(&"wasm") {
+            // the crate `--target rust` writes, as it is written; a library of Rust (`--library`)
+            // is laid otherwise, and the crate is made as a package of the project is
+            let rust = match made.iter().find(|m| m.1 == Target::Rust.key() && !m.3) {
+                Some(m) => m.2.files.clone(),
+                None => {
+                    let o = for_target(&o, &[], Target::Rust);
+                    match over(&laid, &api, || package(&project, &joined, &modules, Target::Rust, &o)) {
+                        Ok(p) => p.files,
+                        Err(r) => return say(r, answer),
+                    }
+                }
+            };
+            let doors = kinds::door(&modules, &o.kinds);
+            if doors.is_empty() {
+                return say(
+                    refusal(
+                        2,
+                        tr!(
+                            "`--extra wasm` は、コードを書く申請の種類が一つも無いので、何も書きません",
+                            "`--extra wasm` has no kind of request whose code is written, so nothing is written"
+                        ),
+                        lang,
+                    ),
+                    answer,
+                );
+            }
+            let w = match wasm::make(&rust, &o.name, &doors, ringi::lower::shape::CONTRACT, made_lang.code(), check, &out.join(REQUESTS), lang) {
+                Ok(w) => w,
+                Err(r) => return say(r, answer),
+            };
+            p.files.push((wasm::ABOUT.to_string(), w.about, None));
+            p.bytes.push((wasm::MODULE.to_string(), w.module, None));
+        }
+        if extras.contains(&"bundle") {
+            let base = match diff_from.as_deref().map(|b| bundle::base(b, lang)).transpose() {
+                Ok(b) => b,
+                Err(r) => return say(r, answer),
+            };
+            let sources = match over(&laid, &api, || bundle::sources(&project, &joined, &laid.kinds, lang)) {
+                Ok(s) => s,
+                Err(r) => return say(r, answer),
+            };
+            let compared = match &base {
+                Some(b) => match bundle::compare(b, &project, &laid.kinds, lang) {
+                    Ok(c) => Some(c),
+                    Err(r) => return say(r, answer),
+                },
+                None => None,
+            };
+            p.files.push((bundle::ABOUT.to_string(), bundle::about(&sources, base.as_ref().zip(compared.as_deref())), None));
+            for (rel, text) in compared.as_deref().map(bundle::pages).unwrap_or_default() {
+                p.files.push((rel, text, None));
+            }
+            for (rel, bytes) in sources {
+                let from = rel.strip_prefix(&format!("{}/", bundle::SOURCE)).map(str::to_string);
+                p.bytes.push((rel, Some(bytes), from));
+            }
+            // every file the run writes into <out>/requests/, and nothing else there; under
+            // `--check`, none when one of them is not what the run writes
+            let mut held: Vec<(String, Vec<u8>)> = p.files.iter().map(|(rel, text, _)| (rel.clone(), text.as_bytes().to_vec())).collect();
+            let mut whole = true;
+            for (rel, bytes, _) in &p.bytes {
+                match bytes {
+                    Some(b) => held.push((rel.clone(), b.clone())),
+                    None => whole = false,
+                }
+            }
+            let zipped = if whole {
+                match zip::write(&held) {
+                    Ok(z) => Some(z),
+                    Err(why) => return say(refusal(2, tr!("バンドルの zip を書けません: ", "the bundle's zip cannot be written: ").then(&why), lang), answer),
+                }
+            } else {
+                None
+            };
+            if let Err(r) = written_once(&p, REQUESTS, lang) {
+                return say(r, answer);
+            }
+            made.push((out.join(REQUESTS), REQUESTS, p, false));
+            made.push((out.clone(), REQUESTS, Package { files: Vec::new(), bytes: vec![(bundle::ZIP.to_string(), zipped, None)], alone: true }, false));
+        } else {
+            made.push((out.join(REQUESTS), REQUESTS, p, false));
+        }
     }
     // the requests whose lists of the versions of the organization have errors, and a request whose
     // code is not written yet, said once the run is sure to write the rest
@@ -2249,7 +2414,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     }
     let mut st = Emitted::default();
     for (dir, target, p, library) in &made {
-        let emitted = emit(dir, *target, p, check, *library, &mut st, lang);
+        let emitted = emit(dir, *target, p, check, *library, &extras, &mut st, lang);
         answer.files.append(&mut st.files);
         if let Err(r) = emitted {
             return say(r, answer);
@@ -2283,6 +2448,20 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         }
         for p in &st.unasked {
             let _ = writeln!(stdout, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}").get(lang));
+        }
+        for p in &st.unasked_extras {
+            let _ = writeln!(stdout, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}").get(lang));
+        }
+        if !st.unasked_extras.is_empty() {
+            let _ = writeln!(
+                stdout,
+                "{}",
+                tr!(
+                    "注記: これらは `--extra wasm` か `--extra bundle` が書くファイルで、この実行は頼んでいません。gen は頼まれていない付属物のファイルに触らないので、要らなければ消してかまいません",
+                    "note: `--extra wasm` or `--extra bundle` writes these files, and this run does not ask for it; gen touches no file of an extra it is not given, so they can be deleted if they are not wanted"
+                )
+                .get(lang)
+            );
         }
         if !st.unasked.is_empty() {
             let _ = writeln!(

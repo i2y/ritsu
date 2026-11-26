@@ -188,8 +188,8 @@ pub fn runs(block: &Block) -> Vec<(String, Vec<String>)> {
 /// section are those files. A command shown without its output, in a list, is only held to be a
 /// command of `ritsu` when it starts with that. A `gen` writes into a scratch directory in place
 /// of the `--out <dir>` the page shows, and what it prints is read with that `<dir>` in the scratch
-/// directory's place, so the repository is not written into; a `gen` shown without `--out` is
-/// wrong.
+/// directory's place, so the repository is not written into, and a later command of the page
+/// reads a path under that `<dir>` where it was written; a `gen` shown without `--out` is wrong.
 pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
     let links = links();
     let scratch = TempDir::new("pages-out");
@@ -197,6 +197,8 @@ pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
     let mut wrong = Vec::new();
     let mut ran = 0;
     for p in pages {
+        // the directories the commands above on the page wrote, as it shows them and where they are
+        let mut written: Vec<(String, String)> = Vec::new();
         for block in p.blocks.iter().filter(|b| b.info == "console") {
             // The files of a reproduction above the block, laid out for the commands in it.
             let files = reproduction_above(p, block).map(|files| {
@@ -234,6 +236,9 @@ pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
                         continue;
                     }
                 }
+                if cmd.split_whitespace().any(|w| w == "wasm") && !wasm_is_built() {
+                    continue;
+                }
                 // `ritsu check` in the root would check every file of the repository, and run the
                 // claims of every `.geas` there: it is run on the files the blocks above it show.
                 if cwd == root() && first == "ritsu" && cmd.split_whitespace().nth(1) == Some("check") {
@@ -243,13 +248,19 @@ pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
                 // A `gen` writes into the scratch directory in place of the `--out` the page shows
                 // (without one, it would write `generated/` into the repository), and the paths it
                 // prints are read as the page shows them.
-                let mut words: Vec<String> = cmd.split_whitespace().map(String::from).collect();
+                // A path into what a command above wrote (`--diff-from generated/requests.zip`) is read
+                // where it wrote it.
+                let at_out = cmd.split_whitespace().position(|w| w == "--out").map(|i| i + 1);
+                let mut words: Vec<String> = cmd.split_whitespace().enumerate().map(|(i, w)| if Some(i) == at_out { w.to_string() } else { into_written(w, &written) }).collect();
                 let mut shown_out = None;
                 if let Some(i) = words.iter().position(|w| w == "--out")
                     && let Some(dir) = words.get_mut(i + 1)
                 {
                     let scratch_out = scratch.path().join(format!("out{ran}")).display().to_string();
-                    shown_out = Some((scratch_out.clone(), std::mem::replace(dir, scratch_out)));
+                    let shown = std::mem::replace(dir, scratch_out.clone());
+                    written.retain(|(s, _)| *s != shown);
+                    written.push((shown.clone(), scratch_out.clone()));
+                    shown_out = Some((scratch_out, shown));
                 } else if words.iter().take(3).any(|w| w == "gen") {
                     wrong.push(format!("{}:{}: `$ {cmd}` would write into the repository: show it with `--out <dir>`", p.name, block.at));
                     continue;
@@ -267,6 +278,30 @@ pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
         }
     }
     (ran, wrong)
+}
+
+/// Whether a command a page shows with `--extra wasm`, which builds a crate for
+/// wasm32-unknown-unknown (ringi's DESIGN 12.6), is run: where the level lets the tests run rustc
+/// and its standard library of wasm32 is there, and a SKIP line says so where not.
+pub fn wasm_is_built() -> bool {
+    let there = || {
+        let Ok(o) = Command::new("rustc").args(["--print", "sysroot"]).output() else { return false };
+        o.status.success() && Path::new(String::from_utf8_lossy(&o.stdout).trim()).join("lib/rustlib/wasm32-unknown-unknown/lib").is_dir()
+    };
+    ritsu_testkit::ready(ritsu_testkit::Need::Rustc, there, "the standard library of wasm32-unknown-unknown is not installed, so the `--extra wasm` the pages of ringi show is not run")
+}
+
+/// `word`, a path into a directory a command above wrote, as where it wrote it; else as it is.
+pub fn into_written(word: &str, written: &[(String, String)]) -> String {
+    for (shown, at) in written.iter().rev() {
+        if word == shown {
+            return at.clone();
+        }
+        if let Some(rest) = word.strip_prefix(&format!("{shown}/")) {
+            return format!("{at}/{rest}");
+        }
+    }
+    word.to_string()
 }
 
 // ---- the code

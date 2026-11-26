@@ -23,6 +23,7 @@
 //! but the vectors begins with the head of what ritsu generates: the same input writes the same
 //! bytes.
 
+pub mod chosen;
 mod mcp;
 mod openapi;
 mod orgschema;
@@ -230,6 +231,9 @@ pub struct Kind {
     pub form: Vec<Fld>,
     pub stages: Vec<Named>,
     pub ways: Vec<Named>,
+    /// Who answers each stage and its deadlines, who each way chooses, and the tables a late stage
+    /// goes up by, in both languages ([`chosen`]).
+    pub chosen: chosen::Chosen,
     /// How its tickets end: of `approved`, `rejected`, `withdrawn` and `expired`.
     pub endings: Vec<String>,
     /// The events a person makes on its tickets, by their names in the contract (`send_back`).
@@ -405,6 +409,7 @@ impl Kind {
             form,
             stages,
             ways,
+            chosen: chosen::of(s),
             endings,
             events,
             reasoned: f.ticket.as_ref().map(|t| t.reasoned().into_iter().map(crate::ast::Reasoned::event).collect()).unwrap_or_default(),

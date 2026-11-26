@@ -652,6 +652,15 @@ struct Entry {
     line: usize,
 }
 
+/// How deep the entries of [`json_entries`] read the JSON of an argument: the arrays and objects of
+/// its text one inside another, counted outside its strings. An argument nested deeper fails with
+/// the kind `input` before it is read, in every target alike (DESIGN 16.4): the readers of the four
+/// languages stop at depths of their own (Go's at 10000, Python's where the interpreter's recursion
+/// stops, TypeScript's where its engine's stack does), and the number is within Python's default.
+/// The harness's readers of the vectors, and the door's (36.11), read deeper, to the depth of the
+/// types.
+pub const ENTRY_DEPTH: usize = 512;
+
 /// A function of a package's modules a host calls through JSON: the function `function` of the
 /// module `module` (its index among the modules), named `name` in the file of [`json_entries`].
 #[derive(Clone, Debug)]
@@ -774,14 +783,14 @@ pub fn json_entries(modules: &[Rc<Checked>], t: Target, name: &str, go_module: &
                 s.push_str(line);
                 s.push('\n');
             }
-            s.push_str(TS_IO);
+            s.push_str(&io_deep(TS_IO, Target::TypeScript, true));
             s.push_str(&ts_read(lang, true));
             s.push_str(&defs);
             s.push('\n');
             s.push_str(&fns);
         }
         Target::Python => {
-            s.push_str(&format!("import datetime as _dt\nimport json\nfrom typing import Any\n\nfrom {name}.glue import kaname\n"));
+            s.push_str(&format!("import datetime as _dt\nimport json\nimport re\nfrom typing import Any\n\nfrom {name}.glue import kaname\n"));
             for i in &wanted {
                 s.push_str(&format!("from {name}.glue import {} as m{i}\n", modules[*i].module.name.ascii()));
             }
@@ -812,7 +821,7 @@ pub fn json_entries(modules: &[Rc<Checked>], t: Target, name: &str, go_module: &
             imports.dedup();
             s.push_str(&format!("import (\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"io\"\n\t\"slices\"\n\t\"strconv\"\n\t\"strings\"\n\t\"unicode/utf8\"\n\n{}\n)\n\n", imports.iter().map(|i| format!("\t{i}")).collect::<Vec<_>>().join("\n")));
             s.push_str(GO_LIB_IO);
-            s.push_str(&go_read(lang));
+            s.push_str(&go_read(lang, true));
             s.push_str(&defs);
             s.push('\n');
             s.push_str(&fns);
@@ -1965,7 +1974,7 @@ impl H {
                     s.push_str(line);
                     s.push('\n');
                 }
-                s.push_str(TS_IO);
+                s.push_str(&io_deep(TS_IO, Target::TypeScript, false));
                 s.push_str(&ts_read(self.lang, false));
                 s.push_str(&defs);
                 s.push_str("\nconst cases: any[] = parse(readFileSync(process.argv[2], \"utf8\"));\nfor (const c of cases) {\n  let entry: [string, string, number] = [\"\", \"\", 0];\n  try {\n    let r: any;\n    let out: any;\n    switch (c.m + \".\" + String(c.f)) {\n");
@@ -2021,7 +2030,7 @@ impl H {
                 imports.dedup();
                 let mut s = format!("// The harness of kaname's tests: each case through the generated code, a JSON line each.\npackage main\n\nimport (\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"errors\"\n\t\"fmt\"\n\t\"io\"\n\t\"os\"\n\t\"slices\"\n\t\"strconv\"\n\t\"strings\"\n\t\"unicode/utf8\"\n\n{}\n)\n\n", imports.iter().map(|i| format!("\t{i}")).collect::<Vec<_>>().join("\n"));
                 s.push_str(GO_IO);
-                s.push_str(&go_read(self.lang));
+                s.push_str(&go_read(self.lang, false));
                 s.push_str(&defs);
                 s.push_str("\nfunc run(c kase) (out any, err error) {\n\tfun, module, line := \"\", \"\", 0\n\tdefer func() {\n\t\tif r := recover(); r != nil {\n\t\t\terr = entryError(r, fun, module, line)\n\t\t}\n\t}()\n\tswitch c.M + \".\" + strconv.Itoa(c.F) {\n");
                 for (m, f, call, out, fails, e) in cases {
@@ -2077,7 +2086,7 @@ impl H {
 /// is no value of JSON, an entry's `parse` stops with the place `at`.
 const TS_IO: &str = r#"
 function parse(text: string, at?: string): any {
-  try {
+@DEEP@  try {
     return JSON.parse(text, (_k: string, v: any, ctx?: { source?: string }) => (typeof v === "number" && ctx?.source !== undefined ? number(ctx.source) : v));
   } catch (e) {
     if (at === undefined) throw e;
@@ -2382,6 +2391,8 @@ struct Said {
     one_key: (&'static str, &'static str),
     keys: (&'static str, &'static str),
     json: &'static str,
+    /// An argument nested deeper than [`ENTRY_DEPTH`] (`@DEPTH@` the number).
+    deep: &'static str,
     int64: &'static str,
     missing: &'static str,
     wrong: &'static str,
@@ -2400,6 +2411,7 @@ fn said_in(lang: Lang) -> Said {
             one_key: ("\"an object with the key \" + ", ""),
             keys: ("\"an object with \" + ", " + \" keys\""),
             json: "\"The argument `\" + w.path + \"` of `\" + fun + \"` is not one value of JSON\"",
+            deep: "\"The argument `\" + w.path + \"` of `\" + fun + \"` nests deeper than @DEPTH@\"",
             int64: "\"The argument `\" + w.path + \"` of `\" + fun + \"` is outside int64\"",
             missing: "\"The argument `\" + w.path + \"` of `\" + fun + \"` is missing, and must \" + w.needed",
             wrong: "\"The argument `\" + w.path + \"` of `\" + fun + \"` is \" + w.given + \", and must \" + w.needed",
@@ -2413,6 +2425,7 @@ fn said_in(lang: Lang) -> Said {
             one_key: ("\"キー \" + ", " + \" のオブジェクト\""),
             keys: ("\"キーを \" + ", " + \" 個持つオブジェクト\""),
             json: "\"関数 `\" + fun + \"` の引数 `\" + w.path + \"` は、一つの JSON の値ではありません\"",
+            deep: "\"関数 `\" + fun + \"` の引数 `\" + w.path + \"` は、@DEPTH@ 段より深く入れ子になっています\"",
             int64: "\"関数 `\" + fun + \"` の引数 `\" + w.path + \"` が int64 の外にあります\"",
             missing: "\"関数 `\" + fun + \"` の引数 `\" + w.path + \"` がありません。\" + w.needed + \"が要ります\"",
             wrong: "\"関数 `\" + fun + \"` の引数 `\" + w.path + \"` が\" + w.given + \"です。\" + w.needed + \"が要ります\"",
@@ -2434,6 +2447,7 @@ fn put_words(template: &str, lang: Lang, lit: impl Fn(&str) -> String, one_key: 
         ("@ONE_KEY@", format!("{}{one_key}{}", w.one_key.0, w.one_key.1)),
         ("@KEYS@", format!("{}{keys}{}", w.keys.0, w.keys.1)),
         ("@JSON@", w.json.to_string()),
+        ("@DEEP_SAID@", w.deep.replace("@DEPTH@", &ENTRY_DEPTH.to_string())),
         ("@INT64@", w.int64.to_string()),
         ("@MISSING@", w.missing.to_string()),
         ("@WRONG@", w.wrong.to_string()),
@@ -2455,20 +2469,121 @@ fn put_words(template: &str, lang: Lang, lit: impl Fn(&str) -> String, one_key: 
 /// the harness hands it to the function, whose check it is the harness's to try (DESIGN 22.4).
 fn ts_read(lang: Lang, entries: bool) -> String {
     let past = if entries { "  if (typeof x === \"bigint\" && (x < -(2n ** 63n) || x > 2n ** 63n - 1n)) throw new Wrong(at, \"\", \"\", 2);\n" } else { "" };
-    put_words(TS_READ, lang, ritsu_emit::lit::json, "quoted(ks[0])", "ks.length").replace("@INT64_PAST@", past)
+    let read = put_words(TS_READ, lang, ritsu_emit::lit::json, "quoted(ks[0])", "ks.length").replace("@INT64_PAST@", past);
+    if entries { format!("{read}{}", deep_fn(TS_DEEP)) } else { read }
+}
+
+/// `io` (TypeScript's [`TS_IO`]) with the check of [`ENTRY_DEPTH`] where its `parse` begins, in a
+/// file of entries; with none in the harness.
+fn io_deep(io: &str, t: Target, entries: bool) -> String {
+    let check = match (t, entries) {
+        (_, false) => "",
+        (Target::TypeScript, true) => "  if (at !== undefined && deep(text)) throw new Wrong(at, \"\", \"\", 5);\n",
+        (Target::Python, true) => "    if _deep(text):\n        raise _Wrong(at, \"\", \"\", 5)\n",
+        (_, true) => "\tif deepJSON(raw) {\n\t\tpanic(wrongJSON{path: at, kind: 5})\n\t}\n",
+    };
+    io.replace("@DEEP@", check)
+}
+
+/// A function of [`TS_DEEP`], [`PY_DEEP`] or [`GO_DEEP`] with the depth put in.
+fn deep_fn(f: &str) -> String {
+    f.replace("@DEPTH@", &ENTRY_DEPTH.to_string())
 }
 
 /// What Python's readers read with and say in `lang`; in a file of entries, an integer past int64 is
 /// refused, as in TypeScript's.
 fn py_read(lang: Lang, entries: bool) -> String {
     let past = if entries { "    if isinstance(x, int) and not isinstance(x, bool) and not -(2**63) <= x <= 2**63 - 1:\n        raise _Wrong(at, \"\", \"\", 2)\n" } else { "" };
-    put_words(PY_READ, lang, ritsu_emit::lit::json, "_quoted(next(iter(x)))", "str(len(x))").replace("@INT64_PAST@", past)
+    let read = io_deep(&put_words(PY_READ, lang, ritsu_emit::lit::json, "_quoted(next(iter(x)))", "str(len(x))").replace("@INT64_PAST@", past), Target::Python, entries);
+    if entries { format!("{}{read}", deep_fn(PY_DEEP)) } else { read }
 }
 
-/// What Go's readers read with and say in `lang`.
-fn go_read(lang: Lang) -> String {
-    put_words(GO_READ, lang, ritsu_emit::lit::go, "quotedText(k)", "strconv.Itoa(len(m))")
+/// What Go's readers read with and say in `lang`; in a file of entries, an argument nested deeper
+/// than [`ENTRY_DEPTH`] is refused, as in TypeScript's and Python's.
+fn go_read(lang: Lang, entries: bool) -> String {
+    let read = io_deep(&put_words(GO_READ, lang, ritsu_emit::lit::go, "quotedText(k)", "strconv.Itoa(len(m))"), Target::Go, entries);
+    if entries { format!("{read}{}", deep_fn(GO_DEEP)) } else { read }
 }
+
+/// TypeScript's count of [`ENTRY_DEPTH`]: the arrays and objects of a text one inside another,
+/// counted outside its strings (a character after a backslash in a string is skipped), before
+/// `JSON.parse`, whose own depth is its engine's.
+const TS_DEEP: &str = r#"/** Whether the text nests deeper than an entry reads (@DEPTH@): its arrays and objects, counted outside its strings. */
+function deep(text: string): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 92) {
+        i++;
+      } else if (c === 34) {
+        inString = false;
+      }
+    } else if (c === 34) {
+      inString = true;
+    } else if (c === 91 || c === 123) {
+      depth += 1;
+      if (depth > @DEPTH@) return true;
+    } else if ((c === 93 || c === 125) && depth > 0) {
+      depth -= 1;
+    }
+  }
+  return false;
+}
+
+"#;
+
+/// Python's: the strings matched and passed over by a pattern (one to the end of the text where its
+/// quote is not closed), as the counts of the other languages pass over them, so that the count is
+/// not a loop of Python over each character.
+const PY_DEEP: &str = r#"_TOKENS = re.compile(r'"[^"\\]*(?:\\.[^"\\]*)*"?|[\[\]{}]', re.S)
+
+
+def _deep(text: str) -> bool:
+    # whether the text nests deeper than an entry reads (@DEPTH@): its arrays and objects, counted
+    # outside its strings, before json.loads, whose own depth is the interpreter's recursion
+    depth = 0
+    for m in _TOKENS.finditer(text):
+        c = m.group()
+        if c in ("[", "{"):
+            depth += 1
+            if depth > @DEPTH@:
+                return True
+        elif c in ("]", "}") and depth > 0:
+            depth -= 1
+    return False
+
+
+"#;
+
+/// Go's, over the bytes of the text.
+const GO_DEEP: &str = r#"// deepJSON is whether a JSON text nests deeper than an entry reads (@DEPTH@): its arrays and
+// objects, counted outside its strings.
+func deepJSON(raw []byte) bool {
+	depth, inString := 0, false
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		switch {
+		case inString && c == '\\':
+			i++
+		case inString:
+			inString = c != '"'
+		case c == '"':
+			inString = true
+		case c == '[' || c == '{':
+			depth++
+			if depth > @DEPTH@ {
+				return true
+			}
+		case (c == ']' || c == '}') && depth > 0:
+			depth--
+		}
+	}
+	return false
+}
+
+"#;
 
 const TS_READ: &str = r#"/** A number JSON writes with a point or an exponent, as it is written. */
 class Real {
@@ -2482,7 +2597,8 @@ class Real {
  * JSON that is no value of the type of its place (kaname's DESIGN 16.4): the place, what is there
  * and what it must be; `kind` 1 where the text is no value of JSON, 2 where a whole number is outside
  * int64, 3 where the date of a field of a rule's element is no day of the calendar (outside its range,
- * which `needed` is), 4 where the key is missing.
+ * which `needed` is), 4 where the key is missing, 5 where an entry's argument nests deeper than it
+ * reads.
  */
 class Wrong {
   readonly path: string;
@@ -2545,6 +2661,8 @@ function said(fun: string, w: Wrong): string {
       return @DAY@;
     case 4:
       return @MISSING@;
+    case 5:
+      return @DEEP_SAID@;
     default:
       return @WRONG@;
   }
@@ -2667,7 +2785,7 @@ def _whole_text(s: str) -> Any:
 
 
 def _parse(text: str, at: str) -> Any:
-    try:
+@DEEP@    try:
         return json.loads(text, parse_float=_Real, parse_int=_whole_text, parse_constant=_constant)
     except (ValueError, RecursionError):
         raise _Wrong(at, "", "", 1) from None
@@ -2723,6 +2841,8 @@ def _said(fun: str, w: _Wrong) -> str:
         return @DAY@
     if w.kind == 4:
         return @MISSING@
+    if w.kind == 5:
+        return @DEEP_SAID@
     return @WRONG@
 
 
@@ -2815,7 +2935,8 @@ type keyAbsent struct{}
 // wrongJSON is JSON that is no value of the type of its place (kaname's DESIGN 16.4): the place,
 // what is there and what it must be; kind 1 where the text is no value of JSON, 2 where a whole
 // number is outside int64, 3 where the date of a field of a rule's element is no day of the
-// calendar (outside its range, which needed is), 4 where the key is missing.
+// calendar (outside its range, which needed is), 4 where the key is missing, 5 where an entry's
+// argument nests deeper than it reads.
 type wrongJSON struct {
 	path   string
 	given  string
@@ -2828,7 +2949,7 @@ type wrongJSON struct {
 // string written with a lone surrogate (`"\ud800"`), which Go's reader reads as U+FFFD, holds the
 // surrogate, as a string of TypeScript or Python does, for the function's check to refuse.
 func jsonValue(raw json.RawMessage, at string) any {
-	if !utf8.Valid(raw) {
+@DEEP@	if !utf8.Valid(raw) {
 		panic(wrongJSON{path: at, kind: 1})
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -3054,6 +3175,8 @@ func wrongSaid(fun string, w wrongJSON) string {
 		return @DAY@
 	case 4:
 		return @MISSING@
+	case 5:
+		return @DEEP_SAID@
 	}
 	return @WRONG@
 }

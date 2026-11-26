@@ -249,7 +249,8 @@ fn ritsu_ringi_api_writes_what_a_request_declares() {
 /// `$ cd` above it in the block (from the root of the repository), with standard error where
 /// standard output is and no language asked of the environment; a line `…` of the page stands for
 /// any number of lines. A command that writes (`--out <dir>`) writes into a scratch directory, and
-/// what it prints is read with the page's `<dir>`; `init` is run in a scratch directory. A command
+/// what it prints is read with the page's `<dir>`, and a later command of the page reads a path
+/// under that `<dir>` where it was written; `init` is run in a scratch directory. A command
 /// shown with no output under it is listed only (ringi's `tests/docs.rs` holds it to the table).
 #[cfg(unix)]
 #[test]
@@ -278,6 +279,8 @@ fn the_commands_on_ringis_pages_print_what_they_show() {
                 (None, None) => {}
             }
         }
+        // the directories the commands above on the page wrote, as it shows them and where they are
+        let mut written: Vec<(String, String)> = Vec::new();
         for b in blocks.into_iter().filter(|b| b.first().is_none_or(|l| l != "#not console")) {
             let mut runs: Vec<(String, Vec<String>)> = Vec::new();
             for l in &b {
@@ -302,13 +305,22 @@ fn the_commands_on_ringis_pages_print_what_they_show() {
                     continue;
                 }
                 assert!(!cmd.contains(['|', ';', '>', '<', '`', '$']), "{page}: `$ {cmd}` is more than a command to run");
-                let mut words: Vec<String> = cmd.split(' ').map(String::from).collect();
+                if cmd.split(' ').any(|w| w == "wasm") && !common::wasm_is_built() {
+                    continue;
+                }
+                // a path into what a command above wrote (`--diff-from generated/requests.zip`) is
+                // read where it wrote it
+                let at_out = cmd.split(' ').position(|w| w == "--out").map(|i| i + 1);
+                let mut words: Vec<String> = cmd.split(' ').enumerate().map(|(i, w)| if Some(i) == at_out { w.to_string() } else { common::into_written(w, &written) }).collect();
                 let mut shown_out = None;
                 if let Some(i) = words.iter().position(|w| w == "--out")
                     && let Some(dir) = words.get_mut(i + 1)
                 {
                     let scratch_out = scratch.path().join(format!("out{ran}")).display().to_string();
-                    shown_out = Some((scratch_out.clone(), std::mem::replace(dir, scratch_out)));
+                    let shown = std::mem::replace(dir, scratch_out.clone());
+                    written.retain(|(s, _)| *s != shown);
+                    written.push((shown.clone(), scratch_out.clone()));
+                    shown_out = Some((scratch_out, shown));
                 }
                 let here = if cmd.split_whitespace().take(3).any(|w| w == "init") { scratch.path().join(format!("init{ran}")) } else { cwd.clone() };
                 std::fs::create_dir_all(&here).unwrap();

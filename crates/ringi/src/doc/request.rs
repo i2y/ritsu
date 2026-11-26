@@ -375,7 +375,7 @@ fn shared_stages(say: &Say, f: &File, args: &[crate::ast::Arg], out: &mut Vec<Bl
 
 /// A condition of a shared route, said on the request's page: an input of the route is said as the
 /// condition the request gives it; `and`, `or` and `not` as they join them.
-fn shared_cond(say: &Say, f: &File, c: &Expr, args: &[crate::ast::Arg]) -> String {
+pub fn shared_cond(say: &Say, f: &File, c: &Expr, args: &[crate::ast::Arg]) -> String {
     match &c.kind {
         ExprKind::Path(p) if p.len() == 1 && f.inputs.iter().any(|i| i.name.text == p[0].text) => match args.iter().find(|a| a.name.text == p[0].text) {
             Some(a) => say.cond(&a.value, None),
@@ -518,7 +518,7 @@ pub(super) fn deadlines(o: &Outcome, run: &Run, say: &Say, out: &mut Vec<Block>)
 }
 
 /// A cell of a table a late stage goes up by: the name of a way, said as the way, or a test.
-fn way_or_test(say: &Say, col: &[Word], t: &crate::ast::Test) -> String {
+pub fn way_or_test(say: &Say, col: &[Word], t: &crate::ast::Test) -> String {
     if let crate::ast::Test::Values { values, not: false } = t {
         let ways: Vec<String> = values
             .iter()

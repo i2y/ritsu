@@ -445,7 +445,73 @@
           "text": "事前の確かめ"
         }
       ],
-      "comment_required": []
+      "comment_required": [],
+      "approvers": [
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is 100,000 JPY or less",
+            "ja": "「種別」が経費、かつ「合計」が100,000円以下のとき"
+          },
+          "who": {
+            "en": "check",
+            "ja": "エージェントの確かめ"
+          },
+          "ways": [
+            "check"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is more than 100,000 JPY and 1,000,000 JPY or less",
+            "ja": "「種別」が経費、かつ「合計」が100,000円より大きく、1,000,000円以下のとき"
+          },
+          "who": {
+            "en": "check",
+            "ja": "エージェントの確かめ"
+          },
+          "ways": [
+            "check"
+          ],
+          "kind": "who",
+          "route": null
+        }
+      ],
+      "deadlines": [
+        {
+          "kind": "due",
+          "days": 3,
+          "calendar": null,
+          "written": null,
+          "en": "It is due 3 business days after it starts, at the end of the day.",
+          "ja": "期限は、始まった日から 3 営業日の日の終わりです。"
+        },
+        {
+          "kind": "remind",
+          "days": 2,
+          "calendar": null,
+          "written": null,
+          "en": "Its approvers are reminded 2 business days after it starts, at 09:00.",
+          "ja": "始まった日から 2 営業日の日の 09:00 に、承認者へ催促が届きます。"
+        },
+        {
+          "kind": "late",
+          "days": null,
+          "calendar": null,
+          "written": "when late escalate by next_up, then expire",
+          "en": "When it is late, it goes up as the table `next_up` says, and its deadline is counted again from then; when it is late again, the ticket expires.",
+          "ja": "期限を過ぎると表 `next_up` のとおりに上へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。"
+        },
+        {
+          "kind": "empty",
+          "days": null,
+          "calendar": null,
+          "written": "when empty escalate, then board",
+          "en": "When nobody can answer it, it goes up to the head above; at the top of the organization, it goes to “board”.",
+          "ja": "答える人がいなければ、上の長へ回ります。組織のいちばん上では、「取締役会」へ回ります。"
+        }
+      ]
     },
     {
       "name": "first",
@@ -457,7 +523,118 @@
           "text": "一次承認"
         }
       ],
-      "comment_required": []
+      "comment_required": [],
+      "approvers": [
+        {
+          "when": {
+            "en": "when “Category” is Travel, and “Amount” is more than 100,000 JPY",
+            "ja": "「種別」が出張、かつ「合計」が100,000円より大きいとき"
+          },
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is more than 100,000 JPY and 1,000,000 JPY or less",
+            "ja": "「種別」が経費、かつ「合計」が100,000円より大きく、1,000,000円以下のとき"
+          },
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is more than 1,000,000 JPY",
+            "ja": "「種別」が経費、かつ「合計」が1,000,000円より大きいとき"
+          },
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Purchase, and “Amount” is 1,000,000 JPY or less",
+            "ja": "「種別」が購買、かつ「合計」が1,000,000円以下のとき"
+          },
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Purchase, and “Amount” is more than 1,000,000 JPY",
+            "ja": "「種別」が購買、かつ「合計」が1,000,000円より大きいとき"
+          },
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": null
+        }
+      ],
+      "deadlines": [
+        {
+          "kind": "due",
+          "days": 3,
+          "calendar": null,
+          "written": null,
+          "en": "It is due 3 business days after it starts, at the end of the day.",
+          "ja": "期限は、始まった日から 3 営業日の日の終わりです。"
+        },
+        {
+          "kind": "remind",
+          "days": 2,
+          "calendar": null,
+          "written": null,
+          "en": "Its approvers are reminded 2 business days after it starts, at 09:00.",
+          "ja": "始まった日から 2 営業日の日の 09:00 に、承認者へ催促が届きます。"
+        },
+        {
+          "kind": "late",
+          "days": null,
+          "calendar": null,
+          "written": "when late escalate by next_up, then expire",
+          "en": "When it is late, it goes up as the table `next_up` says, and its deadline is counted again from then; when it is late again, the ticket expires.",
+          "ja": "期限を過ぎると表 `next_up` のとおりに上へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。"
+        },
+        {
+          "kind": "empty",
+          "days": null,
+          "calendar": null,
+          "written": "when empty escalate, then board",
+          "en": "When nobody can answer it, it goes up to the head above; at the top of the organization, it goes to “board”.",
+          "ja": "答える人がいなければ、上の長へ回ります。組織のいちばん上では、「取締役会」へ回ります。"
+        }
+      ]
     },
     {
       "name": "second",
@@ -469,7 +646,89 @@
           "text": "二次承認"
         }
       ],
-      "comment_required": []
+      "comment_required": [],
+      "approvers": [
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is more than 1,000,000 JPY",
+            "ja": "「種別」が経費、かつ「合計」が1,000,000円より大きいとき"
+          },
+          "who": {
+            "en": "dept_head",
+            "ja": "部長"
+          },
+          "ways": [
+            "dept_head"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Purchase, and “Amount” is 1,000,000 JPY or less",
+            "ja": "「種別」が購買、かつ「合計」が1,000,000円以下のとき"
+          },
+          "who": {
+            "en": "accounting",
+            "ja": "経理"
+          },
+          "ways": [
+            "accounting"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Purchase, and “Amount” is more than 1,000,000 JPY",
+            "ja": "「種別」が購買、かつ「合計」が1,000,000円より大きいとき"
+          },
+          "who": {
+            "en": "dept_head and accounting",
+            "ja": "部長と経理"
+          },
+          "ways": [
+            "dept_head",
+            "accounting"
+          ],
+          "kind": "who",
+          "route": null
+        }
+      ],
+      "deadlines": [
+        {
+          "kind": "due",
+          "days": 3,
+          "calendar": null,
+          "written": null,
+          "en": "It is due 3 business days after it starts, at the end of the day.",
+          "ja": "期限は、始まった日から 3 営業日の日の終わりです。"
+        },
+        {
+          "kind": "remind",
+          "days": 2,
+          "calendar": null,
+          "written": null,
+          "en": "Its approvers are reminded 2 business days after it starts, at 09:00.",
+          "ja": "始まった日から 2 営業日の日の 09:00 に、承認者へ催促が届きます。"
+        },
+        {
+          "kind": "late",
+          "days": null,
+          "calendar": null,
+          "written": "when late escalate by next_up, then expire",
+          "en": "When it is late, it goes up as the table `next_up` says, and its deadline is counted again from then; when it is late again, the ticket expires.",
+          "ja": "期限を過ぎると表 `next_up` のとおりに上へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。"
+        },
+        {
+          "kind": "empty",
+          "days": null,
+          "calendar": null,
+          "written": "when empty escalate, then board",
+          "en": "When nobody can answer it, it goes up to the head above; at the top of the organization, it goes to “board”.",
+          "ja": "答える人がいなければ、上の長へ回ります。組織のいちばん上では、「取締役会」へ回ります。"
+        }
+      ]
     },
     {
       "name": "decide",
@@ -481,7 +740,163 @@
           "text": "決裁"
         }
       ],
-      "comment_required": []
+      "comment_required": [],
+      "approvers": [
+        {
+          "when": {
+            "en": "when “Category” is Travel, and “Amount” is 30,000 JPY or less",
+            "ja": "「種別」が出張、かつ「合計」が30,000円以下のとき"
+          },
+          "who": {
+            "en": "travel_agent",
+            "ja": "エージェントの決裁"
+          },
+          "ways": [
+            "travel_agent"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Travel, and “Amount” is more than 30,000 JPY and 100,000 JPY or less",
+            "ja": "「種別」が出張、かつ「合計」が30,000円より大きく、100,000円以下のとき"
+          },
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Travel, and “Amount” is more than 100,000 JPY",
+            "ja": "「種別」が出張、かつ「合計」が100,000円より大きいとき"
+          },
+          "who": {
+            "en": "dept_head",
+            "ja": "部長"
+          },
+          "ways": [
+            "dept_head"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is 100,000 JPY or less",
+            "ja": "「種別」が経費、かつ「合計」が100,000円以下のとき"
+          },
+          "who": {
+            "en": "manager",
+            "ja": "上長"
+          },
+          "ways": [
+            "manager"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is more than 100,000 JPY and 1,000,000 JPY or less",
+            "ja": "「種別」が経費、かつ「合計」が100,000円より大きく、1,000,000円以下のとき"
+          },
+          "who": {
+            "en": "dept_head",
+            "ja": "部長"
+          },
+          "ways": [
+            "dept_head"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Expenses, and “Amount” is more than 1,000,000 JPY",
+            "ja": "「種別」が経費、かつ「合計」が1,000,000円より大きいとき"
+          },
+          "who": {
+            "en": "division_head",
+            "ja": "本部長"
+          },
+          "ways": [
+            "division_head"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Purchase, and “Amount” is 1,000,000 JPY or less",
+            "ja": "「種別」が購買、かつ「合計」が1,000,000円以下のとき"
+          },
+          "who": {
+            "en": "dept_head",
+            "ja": "部長"
+          },
+          "ways": [
+            "dept_head"
+          ],
+          "kind": "who",
+          "route": null
+        },
+        {
+          "when": {
+            "en": "when “Category” is Purchase, and “Amount” is more than 1,000,000 JPY",
+            "ja": "「種別」が購買、かつ「合計」が1,000,000円より大きいとき"
+          },
+          "who": {
+            "en": "division_head",
+            "ja": "本部長"
+          },
+          "ways": [
+            "division_head"
+          ],
+          "kind": "who",
+          "route": null
+        }
+      ],
+      "deadlines": [
+        {
+          "kind": "due",
+          "days": 3,
+          "calendar": null,
+          "written": null,
+          "en": "It is due 3 business days after it starts, at the end of the day.",
+          "ja": "期限は、始まった日から 3 営業日の日の終わりです。"
+        },
+        {
+          "kind": "remind",
+          "days": 2,
+          "calendar": null,
+          "written": null,
+          "en": "Its approvers are reminded 2 business days after it starts, at 09:00.",
+          "ja": "始まった日から 2 営業日の日の 09:00 に、承認者へ催促が届きます。"
+        },
+        {
+          "kind": "late",
+          "days": null,
+          "calendar": null,
+          "written": "when late escalate by next_up, then expire",
+          "en": "When it is late, it goes up as the table `next_up` says, and its deadline is counted again from then; when it is late again, the ticket expires.",
+          "ja": "期限を過ぎると表 `next_up` のとおりに上へ回ります。期限は、そこから数え直されます。また過ぎるとチケットは期限切れで終わります。"
+        },
+        {
+          "kind": "empty",
+          "days": null,
+          "calendar": null,
+          "written": "when empty escalate, then board",
+          "en": "When nobody can answer it, it goes up to the head above; at the top of the organization, it goes to “board”.",
+          "ja": "答える人がいなければ、上の長へ回ります。組織のいちばん上では、「取締役会」へ回ります。"
+        }
+      ]
     }
   ],
   "ways": [
@@ -494,7 +909,11 @@
           "lang": "ja",
           "text": "上長"
         }
-      ]
+      ],
+      "how": {
+        "en": "the requester's manager: the head of the team the requester is mainly in, or of the team above where that head is the requester or there is none",
+        "ja": "申請者の上長。申請者が主に属するチームの長で、その長が申請者自身か空なら、上のチームの長です"
+      }
     },
     {
       "name": "dept_head",
@@ -505,7 +924,11 @@
           "lang": "ja",
           "text": "部長"
         }
-      ]
+      ],
+      "how": {
+        "en": "the head of the first team of the kind Department (`department`) above the requester",
+        "ja": "申請者から上へたどって最初の、種類が`department`のチームの長"
+      }
     },
     {
       "name": "accounting",
@@ -516,7 +939,11 @@
           "lang": "ja",
           "text": "経理"
         }
-      ]
+      ],
+      "how": {
+        "en": "the members of the team Accounting (`accounting`): one of them answers",
+        "ja": "経理部（`accounting`）の人。だれか一人が答えます"
+      }
     },
     {
       "name": "division_head",
@@ -527,7 +954,11 @@
           "lang": "ja",
           "text": "本部長"
         }
-      ]
+      ],
+      "how": {
+        "en": "the first head above the requester whose position is Head of division (`division_head`) or higher",
+        "ja": "申請者から上へチームの長をたどって、役職が`division_head`以上の最初の人"
+      }
     },
     {
       "name": "check",
@@ -538,7 +969,11 @@
           "lang": "ja",
           "text": "エージェントの確かめ"
         }
-      ]
+      ],
+      "how": {
+        "en": "the agent the flow `precheck_agent` runs answers; where it is not sure, or fails, “manager” answers in its place",
+        "ja": "flow `precheck_agent` のエージェントが答えます。確かでないときと失敗したときは、代わりに「上長」が答えます"
+      }
     },
     {
       "name": "travel_agent",
@@ -549,7 +984,11 @@
           "lang": "ja",
           "text": "エージェントの決裁"
         }
-      ]
+      ],
+      "how": {
+        "en": "the agent the flow `travel_decision` runs answers; where it is not sure, or fails, “manager” answers in its place",
+        "ja": "flow `travel_decision` のエージェントが答えます。確かでないときと失敗したときは、代わりに「上長」が答えます"
+      }
     },
     {
       "name": "board",
@@ -560,7 +999,88 @@
           "lang": "ja",
           "text": "取締役会"
         }
-      ]
+      ],
+      "how": {
+        "en": "the members of the team Board (`board`): one of them answers",
+        "ja": "取締役会（`board`）の人。だれか一人が答えます"
+      }
+    }
+  ],
+  "late_tables": [
+    {
+      "name": "next_up",
+      "en": {
+        "head": [
+          "`approver`",
+          "`goes_to`"
+        ],
+        "rows": [
+          [
+            "check",
+            "manager"
+          ],
+          [
+            "travel_agent",
+            "manager"
+          ],
+          [
+            "manager",
+            "dept_head"
+          ],
+          [
+            "dept_head",
+            "division_head"
+          ],
+          [
+            "accounting",
+            "division_head"
+          ],
+          [
+            "division_head",
+            "division_head"
+          ],
+          [
+            "board",
+            "board"
+          ]
+        ]
+      },
+      "ja": {
+        "head": [
+          "`approver`",
+          "`goes_to`"
+        ],
+        "rows": [
+          [
+            "エージェントの確かめ",
+            "上長"
+          ],
+          [
+            "エージェントの決裁",
+            "上長"
+          ],
+          [
+            "上長",
+            "部長"
+          ],
+          [
+            "部長",
+            "本部長"
+          ],
+          [
+            "経理",
+            "本部長"
+          ],
+          [
+            "本部長",
+            "本部長"
+          ],
+          [
+            "取締役会",
+            "取締役会"
+          ]
+        ]
+      }
     }
   ],
   "endings": [

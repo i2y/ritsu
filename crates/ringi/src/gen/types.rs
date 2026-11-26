@@ -40,7 +40,9 @@
 //!   field the form hides is read as empty, so a condition also changes with what the condition a
 //!   field it reads is shown on reads.
 //! - `stages` (each with the events the kind asks a reason with at it, `comment_required`: `reject`,
-//!   `send_back`, empty where it asks none), `ways`, `endings`, `events` (the events a person makes,
+//!   `send_back`, empty where it asks none; who answers it in each case it comes in, `approvers`,
+//!   and its deadlines, `deadlines`, [`super::chosen`]), `ways` (each with who it chooses, `how`),
+//!   `late_tables` (the tables a late stage goes up by), `endings`, `events` (the events a person makes,
 //!   by their names in the contract), `approvers_edit`, `masters` (the masters it reads, each with
 //!   its key, the field that names a row as a screen shows it (`name_field`: the first text field
 //!   that is not the key), and its fields).
@@ -77,8 +79,9 @@ pub(super) fn json(k: &Kind) -> Json {
         ("self_approval", Json::from(k.self_approval)),
         ("organization", k.organization.as_ref().map(org_json).unwrap_or(Json::Null)),
         ("form", Json::arr(k.form.iter().map(field_json))),
-        ("stages", Json::arr(k.stages.iter().map(|n| stage_json(n, &k.reasoned)))),
-        ("ways", Json::arr(k.ways.iter().map(Named::json))),
+        ("stages", Json::arr(k.stages.iter().map(|n| stage_json(n, &k.reasoned, &k.chosen)))),
+        ("ways", Json::arr(k.ways.iter().map(|w| way_json(w, &k.chosen)))),
+        ("late_tables", k.chosen.tables.clone()),
         ("endings", Json::arr(k.endings.iter().map(Json::str))),
         ("events", Json::arr(k.events.iter().map(|e| Json::str(*e)))),
         ("approvers_edit", Json::arr(k.approvers_edit.iter().map(Json::str))),
@@ -87,12 +90,25 @@ pub(super) fn json(k: &Kind) -> Json {
     ])
 }
 
-/// A stage: its names and titles, and the events the kind asks a reason with at it
-/// (`comment_required`, DESIGN 7.2), which a screen and a tool show the comment as required for.
-fn stage_json(n: &Named, reasoned: &[&str]) -> Json {
+/// A stage: its names and titles, the events the kind asks a reason with at it
+/// (`comment_required`, DESIGN 7.2), which a screen and a tool show the comment as required for,
+/// and who answers it in each case and its deadlines ([`super::chosen`]).
+fn stage_json(n: &Named, reasoned: &[&str], chosen: &super::chosen::Chosen) -> Json {
     let mut j = n.json();
+    let (approvers, deadlines) = chosen.stages.iter().find(|(w, _, _)| *w == n.written).map(|(_, a, d)| (a.clone(), d.clone())).unwrap_or((Json::arr([]), Json::arr([])));
     if let Json::Obj(o) = &mut j {
         o.push(("comment_required".to_string(), Json::arr(reasoned.iter().map(|e| Json::str(*e)))));
+        o.push(("approvers".to_string(), approvers));
+        o.push(("deadlines".to_string(), deadlines));
+    }
+    j
+}
+
+/// A way to choose an approver: its names and titles, and who it chooses (`how`).
+fn way_json(n: &Named, chosen: &super::chosen::Chosen) -> Json {
+    let mut j = n.json();
+    if let Json::Obj(o) = &mut j {
+        o.push(("how".to_string(), chosen.ways.iter().find(|(w, _)| *w == n.written).map(|(_, h)| h.clone()).unwrap_or(Json::Null)));
     }
     j
 }

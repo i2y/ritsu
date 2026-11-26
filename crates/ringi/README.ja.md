@@ -310,7 +310,7 @@ $ ritsu ringi extract examples/expense.ja.ringi --out lowered --lang ja
 `ritsu gen --target typescript`（と `python`、`go`、`rust`）は、申請が読む規則、日付、帳簿、ゲート、フローのコードの隣に、申請を下ろしたファイルのコード、チケットの機械（kaname のモジュール）、申請の種類の一覧を書きます。一覧の入口 `start` と `next` は JSON を受けて JSON を返すので、一つのサーバーが、どの種類の型も持たずにすべての種類を動かせます。
 `start` と `next` に約束の形でない JSON を渡すと、入口が機械を動かす前に断ります。断る文は四つの言語で同じで、どこが、何を渡され、何が要るかを言います（``関数 `start` の引数 `submit.form.days` が "three" です。整数が要ります``）。
 単位の付いた ritsu の型（金額、率、量）のフィールドは、計算するフィールドも含めて生成でき、画面は単位の刻みで見せます。
-`ritsu gen --target requests` は、サーバーと画面が読む物を、プロジェクトに一度だけ書きます。申請の種類、OpenAPI 3.1 のサーバーの API、エージェントに渡す道具、A2UI 1.0 のメッセージの画面と、ritsu のカタログと画面が呼ぶ関数、組織のデータのスキーマ、ベクタです。
+`ritsu gen --target requests` は、サーバーと画面が読む物を、プロジェクトに一度だけ書きます。申請の種類、OpenAPI 3.1 のサーバーの API、エージェントに渡す道具、A2UI 1.0 のメッセージの画面と、ritsu のカタログと画面が呼ぶ関数、組織のデータのスキーマ、ベクタです。`--extra wasm` を付ければ、Rust のコードを WebAssembly の一つのモジュール `requests/kinds.wasm` に組みます。サーバーはこれを読み込むだけで、自分では組まずに全部の申請の種類を動かせます。`--extra bundle` を付ければ、`requests/` と、申請の種類のもとのファイルを一つの zip `requests.zip` にまとめ、`--diff-from` で前のバンドルとの `ringi diff` のページも入れます。
 ファイルごとの中身と、サーバーが足す物は [docs/reference.md](docs/reference.md#what-gen-writes)（英語）にあります。
 
 ## サーバー
@@ -384,7 +384,7 @@ $ ritsu ringi explain E301 --lang ja
 - 例の五つの申請の種類（英語の版と日本語の名前の版）と、共有の組織、マスタ、経路が検査を通り、二つの版が同じ所で同じことを言うことを確かめます。組織の二つの版で数えると、言うのは版のデータから来ることだけです。
 - どの診断のコードにも、それを出す一番小さなファイルが英語と日本語の両方であります。注が示す直し方を書き入れると、検査を通ります。
 - チケットの機械が、例のシナリオと、機械のために書いた 25 のファイルのシナリオを、英語と日本語で、書いたとおりに進めます。どのシナリオのフォームでも、二つの版のすべての人を申請者にしてチケットを最後まで進め、`simulate` と検査の言うとおりに動き、検査の数えた営業日を越えないことを確かめます。
-- TypeScript、Python、Go、Rust に `ritsu gen` が書いたコードが、例と機械の申請のベクタ 10,100 件に機械と同じ答えを返し（ritsu の `tests/gen_requests.rs`）、`tsc --strict`、`mypy --strict`、`go vet`、`cargo clippy -- -D warnings` を通ります。
+- TypeScript、Python、Go、Rust に `ritsu gen` が書いたコードと、それを `--extra wasm` で組んだ WebAssembly のモジュールが、例と機械の申請のベクタ 11,141 件に機械と同じ答えを返します（ritsu の `tests/gen_requests.rs`）。コードは `tsc --strict`、`mypy --strict`、`go vet`、`cargo clippy -- -D warnings` を通ります。
 - 画面を A2UI 1.0 と ritsu のカタログで検証し、画面が呼ぶ関数が、途中のフォームのベクタに Node の下で機械と同じ答えを返すことを確かめます。
 - `doc` と `diff` のページは golden です。例ごとの下ろしたファイルも golden で、それぞれの言語の検査を通ります。
 - 言語をまたぐ確かめは、成り立つ形、成り立たない形、決められない形を、英語と日本語の golden で持ちます（ritsu の `tests/cross.rs`）。

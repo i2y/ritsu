@@ -497,9 +497,24 @@ fn names_the_languages_read_otherwise_are_lowered_under_others() {
     };
     // the functions of the screens hold each kind's values.rule as rulec writes it, in the names the
     // lowered files give, and call it by them; what the screens, their catalog and the rest say is
-    // in the request's names
-    for f in written.iter().filter(|f| *f != "a2ui/functions.js") {
-        let text = std::fs::read_to_string(dir.join(f)).unwrap();
+    // in the request's names (the module of `--extra wasm`, which holds the code, is no text)
+    for f in written.iter().filter(|f| *f != "a2ui/functions.js" && *f != "kinds.wasm") {
+        let mut text = std::fs::read_to_string(dir.join(f)).unwrap();
+        // but the name the door knows each kind's module by, which is the lowered files' (`match`
+        // is `match_value`): what a server calls, beside the kind's own name
+        if f == "wasm.json" {
+            let mut about = ritsu_base::json::parse(&text).unwrap();
+            if let Json::Obj(fields) = &mut about
+                && let Some((_, Json::Arr(kinds))) = fields.iter_mut().find(|(k, _)| k == "kinds")
+            {
+                for k in kinds.iter_mut() {
+                    if let Json::Obj(kf) = k {
+                        kf.retain(|(key, _)| key != "module");
+                    }
+                }
+            }
+            text = about.pretty();
+        }
         for given in given_in_place {
             assert!(!text.contains(given), "requests/{f} says `{given}`, a name the lowered files give in place of the request's");
         }
@@ -959,6 +974,11 @@ fn answers_as_the_reference(t: &TempDir, tag: &str, requests: &[&str], read: &[&
     for target in ["typescript", "python", "go", "rust", "requests"] {
         args.extend(["--target", target]);
     }
+    // the package of Rust as one module of Wasm too (ringi's DESIGN 12.6), each vector through it
+    let wasm = wasm_ready();
+    if wasm {
+        args.extend(["--extra", "wasm"]);
+    }
     let (code, stdout, err) = ritsu_in(t.path(), &args);
     assert_eq!(code, 0, "{stdout}{err}");
     assert!(!stdout.contains("is not written"), "a request's code is not written:\n{stdout}");
@@ -1093,6 +1113,12 @@ fn answers_as_the_reference(t: &TempDir, tag: &str, requests: &[&str], read: &[&
         assert!(o.ok, "the driver:\n{}", o.both());
         report("Rust", &o.stdout);
     }
+    if wasm {
+        let calls = out.join("calls.tsv");
+        std::fs::write(&calls, &lines).unwrap();
+        let (_, printed) = wasm_calls(&t.path().join(format!("wasm-{tag}")), &out.join("requests"), &calls);
+        report("Wasm", &printed);
+    }
 }
 
 /// The files `--target requests` writes for the expense and the leave, by their paths under
@@ -1168,6 +1194,477 @@ flow
   let moved = submit_leave(form: leave)
   succeed ticket = moved.ticket.id, status = moved.ticket.status
 "#;
+
+/// The vectors `--target requests` wrote into `requests` of each kind, as calls of the list of the
+/// kinds of request (as [`answers_as_the_reference`] reads them from the reference).
+fn vector_calls(requests: &Path, kinds: &[&str]) -> Vec<Call> {
+    let mut calls = Vec::new();
+    for kind in kinds {
+        let vectors = std::fs::read_to_string(requests.join(format!("vectors/{kind}.jsonl"))).unwrap();
+        for line in vectors.lines() {
+            let v = ritsu_base::json::parse(line).expect("a vector is a line of JSON");
+            let (entry, input, answer) = ringi::lower::shape::call_of(&v).expect("a vector");
+            let names: &[&str] = if entry == "start" { &["submit", "organization"] } else { &["ticket", "event", "organization"] };
+            let parts = names.iter().map(|n| input.get(n).cloned().unwrap_or(Json::Null).compact()).collect();
+            let now = input.get("now").and_then(Json::as_int).and_then(|n| i64::try_from(n).ok()).expect("a vector has its time");
+            calls.push(Call { kind: kind.to_string(), entry, now, parts, answer, line: line.chars().take(300).collect() });
+        }
+        let worked = std::fs::read_to_string(requests.join(format!("vectors/worked/{kind}.jsonl"))).unwrap();
+        for line in worked.lines() {
+            let v = ritsu_base::json::parse(line).expect("a vector of `worked` is a line of JSON");
+            let (Some(input), Some(answer)) = (v.get("input"), v.get("answer")) else { panic!("{kind}: a vector of `worked` with no input or no answer: {line}") };
+            calls.push(Call { kind: kind.to_string(), entry: "worked", now: 0, parts: vec![input.compact()], answer: answer.clone(), line: line.chars().take(300).collect() });
+        }
+    }
+    calls
+}
+
+/// The lines of `stdout` that say a path, by what they say of it (`generated: `), the paths as
+/// the run printed them.
+fn said_of(stdout: &str, what: &str) -> Vec<String> {
+    stdout.lines().filter_map(|l| l.strip_prefix(what)).map(str::to_string).collect()
+}
+
+/// `--extra wasm` (ringi's DESIGN 12.6): the package of Rust is built as one module of Wasm,
+/// `requests/kinds.wasm`, with how a server calls it, `requests/wasm.json`; in a place of its own
+/// when `--target rust` is not given, which writes no `<out>/rust`. Every vector of the kinds
+/// answers through the module as the reference answers, as a run in English and one in Japanese
+/// write it; the same input builds the same bytes, with `--target rust` beside or not; `--check`
+/// holds the files to the sources with no build and no toolchain on its way, and says a module, a
+/// digest and a list of kinds changed by hand stale, as the host refuses or misanswers them; a run
+/// with no `--extra` says what an earlier one wrote for it, and leaves it; and with no cargo, or no
+/// standard library of wasm32, nothing is written and the run says what to install.
+#[test]
+fn wasm_is_built_alike_held_by_check_and_refused_without_its_tools() {
+    if !wasm_ready() {
+        return;
+    }
+    let t = TempDir::new("gen-requests-wasm");
+    lay(&t);
+    let kinds = ["expense", "leave"];
+    let args_of = |out: &str, more: &[&str]| -> Vec<String> {
+        let mut a = vec!["gen", "examples/leave.ringi", "examples/expense.ringi", "--root", ".", "--out", out, "--target", "requests", "--catalog", CATALOG, "--extra", "wasm"];
+        a.extend(more);
+        a.into_iter().map(String::from).collect()
+    };
+    let run = |args: &[String]| ritsu_in(t.path(), &args.iter().map(String::as_str).collect::<Vec<_>>());
+    let (code, stdout, err) = run(&args_of("out", &[]));
+    assert_eq!(code, 0, "{stdout}{err}");
+    let req = t.path().join("out/requests");
+    assert!(!t.path().join("out/rust").exists(), "--extra wasm wrote <out>/rust with no --target rust:\n{stdout}");
+    let module = std::fs::read(req.join("kinds.wasm")).unwrap();
+    let about_text = std::fs::read_to_string(req.join("wasm.json")).unwrap();
+    let about = ritsu_base::json::parse(&about_text).unwrap();
+    assert!(about_text.starts_with("{\n  \"//\": \"Code generated by ritsu "), "{about_text}");
+    assert_eq!(about.get("wasm").and_then(Json::as_int), Some(1));
+    assert_eq!(about.get("contract").and_then(Json::as_int), Some(i128::from(ringi::lower::shape::CONTRACT)));
+    assert_eq!(about.get("lang").and_then(Json::as_str), Some("en"));
+    assert_eq!(about.get("file").and_then(Json::as_str), Some("kinds.wasm"));
+    assert_eq!(about.get("sha256").and_then(Json::as_str), Some(ritsu_base::sha256::hex(&module).as_str()));
+    assert_eq!(about.get("exports").unwrap().compact(), r#"{"call":"call","realloc":"cabi_realloc","post_return":"cabi_post_call","memory":"memory"}"#);
+    let listed: Vec<(String, i128)> = about.get("kinds").and_then(Json::as_arr).unwrap().iter().map(|k| (k.get("name").and_then(Json::as_str).unwrap().to_string(), k.get("version").and_then(Json::as_int).unwrap())).collect();
+    for (name, version) in &listed {
+        let described = ritsu_base::json::parse(&std::fs::read_to_string(req.join(format!("types/{name}.json"))).unwrap()).unwrap();
+        assert_eq!(described.get("version").and_then(Json::as_int), Some(*version), "{name}");
+    }
+    assert_eq!(listed.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), kinds);
+    let built = about.get("built").unwrap();
+    assert!(built.get("rustc").and_then(Json::as_str).is_some_and(|r| r.starts_with("rustc ")), "{}", built.compact());
+    // every vector through the module, as the reference answers
+    let calls = vector_calls(&req, &kinds);
+    std::fs::write(t.path().join("calls.tsv"), call_lines(&calls)).unwrap();
+    let answered = |requests: &Path| -> (String, usize, Vec<String>) {
+        let (lang, printed) = wasm_calls(&t.path().join("host"), requests, &t.path().join("calls.tsv"));
+        let (agree, wrong) = held(&calls, &printed);
+        (lang, agree, wrong)
+    };
+    let (lang, agree, wrong) = answered(&req);
+    assert!(wrong.is_empty(), "the Wasm answers otherwise than the reference:\n{}", wrong.join("\n"));
+    assert_eq!((lang.as_str(), agree), ("en", calls.len()));
+    println!("Wasm (en): {agree} of {} vectors of {} kinds agree with the reference", calls.len(), kinds.len());
+    // the same input, the same module, whether the crate is built where <out>/rust is written or not
+    let (code, stdout, err) = run(&args_of("again", &["--target", "rust"]));
+    assert_eq!(code, 0, "{stdout}{err}");
+    assert!(t.path().join("again/rust/Cargo.toml").is_file());
+    for f in ["kinds.wasm", "wasm.json"] {
+        assert!(std::fs::read(req.join(f)).unwrap() == std::fs::read(t.path().join("again/requests").join(f)).unwrap(), "{f} is built otherwise from the same input");
+    }
+    // a run in Japanese: the entries' sentences in Japanese, and every vector answered the same
+    let (code, stdout, err) = run(&args_of("ja", &["--lang", "ja"]));
+    assert_eq!(code, 0, "{stdout}{err}");
+    let ja = t.path().join("ja/requests");
+    assert_eq!(ritsu_base::json::parse(&std::fs::read_to_string(ja.join("wasm.json")).unwrap()).unwrap().get("lang").and_then(Json::as_str), Some("ja"));
+    let (lang, agree, wrong) = answered(&ja);
+    assert!(wrong.is_empty(), "the Wasm in Japanese answers otherwise than the reference:\n{}", wrong.join("\n"));
+    assert_eq!((lang.as_str(), agree), ("ja", calls.len()));
+    println!("Wasm (ja): {agree} of {} vectors agree with the reference", calls.len());
+    // `--check` builds nothing: no cargo and no rustc are on its way
+    let nothing = t.path().join("no-tools");
+    std::fs::create_dir_all(&nothing).unwrap();
+    let no_tools: [(&str, Option<&std::ffi::OsStr>); 3] = [("PATH", Some(nothing.as_os_str())), ("CARGO", Some(std::ffi::OsStr::new("/nonexistent/cargo"))), ("RUSTC", Some(std::ffi::OsStr::new("/nonexistent/rustc")))];
+    let check = |out: &str| {
+        let args = args_of(out, &["--check"]);
+        ritsu_with(t.path(), &args.iter().map(String::as_str).collect::<Vec<_>>(), &no_tools)
+    };
+    let (code, stdout, err) = check("out");
+    assert_eq!(code, 0, "--check after the run that wrote it:\n{stdout}{err}");
+    // a module changed by hand: each place of a sentence a vector answers, a letter of it changed
+    let words: Vec<String> = calls.iter().filter_map(|c| c.answer.get("err")).filter_map(|e| e.get("text").and_then(Json::as_str)).filter(|s| s.len() > 20 && s.is_ascii()).map(str::to_string).collect();
+    let word = words.iter().find(|w| module.windows(w.len()).any(|x| x == w.as_bytes())).expect("a sentence a vector answers, in the module");
+    let mut changed = module.clone();
+    let letter = word.bytes().position(|b| b.is_ascii_alphabetic()).expect("a letter in the sentence");
+    let places: Vec<usize> = module.windows(word.len()).enumerate().filter(|(_, x)| *x == word.as_bytes()).map(|(i, _)| i + letter).collect();
+    for at in places {
+        changed[at] ^= 0x20;
+    }
+    assert!(changed != module);
+    let with_sha = |sha: &str| about_text.replace(&ritsu_base::sha256::hex(&module), sha);
+    let restore = || {
+        std::fs::write(req.join("kinds.wasm"), &module).unwrap();
+        std::fs::write(req.join("wasm.json"), &about_text).unwrap();
+    };
+    // alone, `--check` says it stale, and the host refuses it by its digest
+    std::fs::write(req.join("kinds.wasm"), &changed).unwrap();
+    let (code, stdout, err) = check("out");
+    assert_eq!(code, 1, "{stdout}{err}");
+    assert!(said_of(&stdout, "generated file is stale or hand-edited: ").iter().any(|p| p.ends_with("kinds.wasm")), "{stdout}");
+    let host = t.path().join("host/wasm_host.mjs");
+    let refused = || {
+        let o = ritsu_testkit::run::finish(Command::new("node").arg(&host).arg(&req).arg(t.path().join("calls.tsv")), RUN, "node, running the host of the Wasm");
+        assert!(!o.ok && o.stderr.contains("the module is not the one wasm.json says"), "{}", o.both());
+    };
+    refused();
+    // with its digest written in wasm.json too, it answers otherwise than the reference: what
+    // holds a module to its sources is a build of them, which the vectors hold to the reference
+    // (ringi's DESIGN 12.6), and which `--check`, building nothing, does not see
+    std::fs::write(req.join("wasm.json"), with_sha(&ritsu_base::sha256::hex(&changed))).unwrap();
+    let (_, agree, wrong) = answered(&req);
+    assert!(agree < calls.len() && !wrong.is_empty(), "the module changed answers as before");
+    let (code, stdout, err) = check("out");
+    assert_eq!(code, 0, "{stdout}{err}");
+    // a digest changed by hand: the host refuses the module, and `--check` says wasm.json stale
+    std::fs::write(req.join("kinds.wasm"), &module).unwrap();
+    std::fs::write(req.join("wasm.json"), with_sha(&"0".repeat(64))).unwrap();
+    let (code, stdout, err) = check("out");
+    assert_eq!(code, 1, "{stdout}{err}");
+    assert!(said_of(&stdout, "generated file is stale or hand-edited: ").iter().any(|p| p.ends_with("wasm.json")), "{stdout}");
+    refused();
+    // a kind taken out of wasm.json: its calls find no kind, and `--check` says wasm.json stale
+    let mut dropped = about.clone();
+    if let Json::Obj(fields) = &mut dropped
+        && let Some((_, Json::Arr(ks))) = fields.iter_mut().find(|(k, _)| k == "kinds")
+    {
+        ks.retain(|k| k.get("name").and_then(Json::as_str) != Some("leave"));
+    }
+    std::fs::write(req.join("wasm.json"), format!("{}\n", dropped.pretty())).unwrap();
+    let (code, stdout, err) = check("out");
+    assert_eq!(code, 1, "{stdout}{err}");
+    assert!(said_of(&stdout, "generated file is stale or hand-edited: ").iter().any(|p| p.ends_with("wasm.json")), "{stdout}");
+    let (_, agree, wrong) = answered(&req);
+    let leave = calls.iter().filter(|c| c.kind == "leave").count();
+    assert!(agree == calls.len() - leave && !wrong.is_empty(), "the calls of a kind wasm.json does not list are answered");
+    restore();
+    let (code, stdout, err) = check("out");
+    assert_eq!(code, 0, "{stdout}{err}");
+    // `--format json` names the extras of the run, and each file with what became of it
+    let args = args_of("out", &["--check", "--format", "json"]);
+    let (code, stdout, err) = ritsu_with(t.path(), &args.iter().map(String::as_str).collect::<Vec<_>>(), &no_tools);
+    assert_eq!(code, 0, "{stdout}{err}");
+    let j = ritsu_base::json::parse(&stdout).unwrap();
+    assert_eq!(j.get("extras").unwrap().compact(), r#"["wasm"]"#);
+    let statuses: Vec<String> = j
+        .get("files")
+        .and_then(Json::as_arr)
+        .unwrap()
+        .iter()
+        .filter(|f| f.get("path").and_then(Json::as_str).is_some_and(|p| p.ends_with("kinds.wasm") || p.ends_with("wasm.json")))
+        .map(|f| f.get("state").and_then(Json::as_str).unwrap_or("?").to_string())
+        .collect();
+    assert_eq!(statuses, ["same", "same"], "{stdout}");
+    // a run that does not ask for it says the files an earlier one wrote for it, and leaves them
+    let (code, stdout, err) = run(&args_of("out", &[])[..args_of("out", &[]).len() - 2]);
+    assert_eq!(code, 0, "{stdout}{err}");
+    let left = said_of(&stdout, "generated no more, and still there: ");
+    assert!(left.iter().any(|p| p.ends_with("kinds.wasm")) && left.iter().any(|p| p.ends_with("wasm.json")), "{stdout}");
+    assert!(stdout.contains("note: `--extra wasm` or `--extra bundle` writes these files, and this run does not ask for it"), "{stdout}");
+    assert!(std::fs::read(req.join("kinds.wasm")).unwrap() == module && std::fs::read_to_string(req.join("wasm.json")).unwrap() == about_text);
+    // no cargo: nothing written, and what to install said, in English and in Japanese
+    for (lang, said) in [("en", "`--extra wasm` cannot find cargo, so nothing is written; install Rust's toolchain (https://rustup.rs)"), ("ja", "`--extra wasm` は、cargo が見つからないので、何も書きません。Rust のツールチェーンを入れてください（https://rustup.rs）")] {
+        let mut args = vec!["--lang".to_string(), lang.to_string()];
+        args.extend(args_of(&format!("no-cargo-{lang}"), &[]));
+        let (code, stdout, err) = ritsu_with(t.path(), &args.iter().map(String::as_str).collect::<Vec<_>>(), &no_tools);
+        assert_eq!(code, 2, "{stdout}{err}");
+        assert!(err.contains(said), "{err}");
+        assert!(!t.path().join(format!("no-cargo-{lang}")).exists(), "something is written with no cargo");
+    }
+    // a rustc with no standard library of wasm32: nothing written, and `rustup target add` said
+    let fake = t.path().join("fake-rustc");
+    let empty = t.path().join("no-libs");
+    std::fs::create_dir_all(&empty).unwrap();
+    std::fs::write(&fake, format!("#!/bin/sh\nif [ \"$1\" = \"-V\" ]; then echo 'rustc 1.0.0 (fake)'; exit 0; fi\necho '{}'\n", empty.display())).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let args = args_of("no-wasm32", &[]);
+    let (code, stdout, err) = ritsu_with(t.path(), &args.iter().map(String::as_str).collect::<Vec<_>>(), &[("RUSTC", Some(fake.as_os_str()))]);
+    assert_eq!(code, 2, "{stdout}{err}");
+    assert!(err.contains("finds no standard library of wasm32-unknown-unknown for rustc 1.0.0 (fake), so nothing is written; install it with `rustup target add wasm32-unknown-unknown`"), "{err}");
+    assert!(!t.path().join("no-wasm32").exists(), "something is written with no standard library of wasm32");
+    // what it is an extra of, and what an extra needs
+    for (args, said) in [
+        (vec!["gen", "examples/leave.ringi", "--root", ".", "--out", "x", "--target", "go", "--extra", "wasm"], "error: `--extra wasm` is an extra of `requests`, and there is no `--target requests`\n"),
+        (vec!["gen", "examples/leave.ringi", "--root", ".", "--out", "x", "--target", "requests", "--catalog", CATALOG, "--extra", "bundle"], "error: `--extra bundle` needs `--extra wasm`: a bundle carries the Wasm a server loads with no build of its own\n"),
+        (vec!["gen", "examples/leave.ringi", "--root", ".", "--out", "x", "--target", "requests", "--catalog", CATALOG, "--extra", "wasm", "--diff-from", "out/requests"], "error: `--diff-from` goes with `--extra bundle`\n"),
+    ] {
+        let (code, stdout, err) = ritsu_in(t.path(), &args);
+        assert_eq!((code, err.as_str()), (2, said), "{stdout}");
+        assert!(!t.path().join("x").exists());
+    }
+}
+
+/// Python's reader of a zip, run with `-I`: `testzip`, then each entry's name, the SHA-256 and the
+/// size of what it reads, and whether it is a directory.
+const PY_UNZIP: &str = r#"import hashlib
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as z:
+    bad = z.testzip()
+    if bad is not None:
+        sys.exit("testzip finds a bad file: " + bad)
+    for i in z.infolist():
+        b = z.read(i)
+        print(i.filename + "\t" + hashlib.sha256(b).hexdigest() + "\t" + str(len(b)) + "\t" + str(i.is_dir()).lower())
+"#;
+
+/// Go's (archive/zip), printing the same; reading each entry to its end checks its CRC-32.
+const GO_UNZIP: &str = r#"package main
+
+import (
+	"archive/zip"
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"os"
+)
+
+func main() {
+	r, err := zip.OpenReader(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer r.Close()
+	for _, f := range r.File {
+		rc, err := f.Open()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, f.Name, err)
+			os.Exit(1)
+		}
+		b, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, f.Name, err)
+			os.Exit(1)
+		}
+		fmt.Printf("%s\t%x\t%d\t%v\n", f.Name, sha256.Sum256(b), len(b), f.FileInfo().IsDir())
+	}
+}
+"#;
+
+/// The zip at `zip` read by readers other than ritsu's: Python's zipfile and Go's archive/zip, each
+/// file the same bytes as `want` and none other, no directory among them; and `unzip -t`, which
+/// finds no error. `dir` is where their programs are written.
+fn read_elsewhere(dir: &Path, zip: &Path, want: &std::collections::BTreeMap<String, Vec<u8>>) {
+    std::fs::create_dir_all(dir).unwrap();
+    let wanted: Vec<String> = want.iter().map(|(p, b)| format!("{p}\t{}\t{}\tfalse", ritsu_base::sha256::hex(b), b.len())).collect();
+    let listed = |stdout: &str| {
+        let mut l: Vec<String> = stdout.lines().map(str::to_string).collect();
+        l.sort();
+        l
+    };
+    if ready(Need::Python, || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()), "python3 is not installed; the zip is not read by Python's zipfile") {
+        std::fs::write(dir.join("unzip.py"), PY_UNZIP).unwrap();
+        let o = ritsu_testkit::run::finish(Command::new("python3").arg("-I").arg(dir.join("unzip.py")).arg(zip).env("PYTHONIOENCODING", "utf-8"), RUN, "python3's zipfile");
+        assert!(o.ok, "Python's zipfile does not read {}:\n{}", zip.display(), o.both());
+        assert_eq!(listed(&o.stdout), wanted, "Python's zipfile reads {} otherwise", zip.display());
+        println!("Python's zipfile reads the {} files of {} as written", want.len(), zip.display());
+    }
+    if ready(Need::Go, have_go, "go is not installed; the zip is not read by Go's archive/zip") {
+        let g = dir.join("go");
+        std::fs::create_dir_all(&g).unwrap();
+        std::fs::write(g.join("go.mod"), "module unzip\n\ngo 1.21\n").unwrap();
+        std::fs::write(g.join("main.go"), GO_UNZIP).unwrap();
+        let bin = g.join("unzip.bin");
+        let o = ritsu_testkit::run::finish(go_in(&g).args(["build", "-o"]).arg(&bin).arg("."), LIMIT, "go build of the reader of zip");
+        assert!(o.ok, "go build:\n{}", o.both());
+        let o = ritsu_testkit::run::finish(Command::new(&bin).arg(zip), RUN, "Go's archive/zip");
+        assert!(o.ok, "Go's archive/zip does not read {}:\n{}", zip.display(), o.both());
+        assert_eq!(listed(&o.stdout), wanted, "Go's archive/zip reads {} otherwise", zip.display());
+        println!("Go's archive/zip reads the {} files of {} as written", want.len(), zip.display());
+    }
+    if Command::new("unzip").arg("-v").output().is_ok_and(|o| o.status.success()) {
+        let o = ritsu_testkit::run::finish(Command::new("unzip").arg("-tq").arg(zip), RUN, "unzip -t");
+        assert!(o.ok && o.stdout.contains("No errors detected"), "unzip -t finds fault with {}:\n{}", zip.display(), o.both());
+    } else {
+        ritsu_testkit::skip("unzip is not installed; the zip is not tested by unzip -t");
+    }
+}
+
+/// `--extra bundle` (ringi's DESIGN 12.6): `<out>/requests.zip` holds every file `<out>/requests/`
+/// holds, the same bytes, and nothing else; with them, the files the kinds are made from
+/// (`source/`, listed in `bundle.json` with their digests), a request's `.ringi` and every file of
+/// a language it reads, and none of the organization's or the masters' data. Python's zipfile,
+/// Go's archive/zip and `unzip -t` read it as written, and so a zip of an empty file, of large
+/// ones stored and compressed, and of names in Japanese; the same input writes the same bytes;
+/// `--check` says a file of it changed by hand; `--diff-from` puts what `ringi diff` says of each
+/// kind against the bundle before into `diff/`, the same pages from the zip as from a directory of
+/// it; a `--diff-from` that is no bundle is refused, and a run that does not ask for the bundle
+/// says its files, and leaves them.
+#[test]
+fn a_bundle_holds_the_requests_and_other_readers_read_it() {
+    use std::collections::BTreeMap;
+    if !wasm_ready() {
+        return;
+    }
+    let t = TempDir::new("gen-requests-bundle");
+    lay(&t);
+    // a kind of request in a file named in Japanese, which the bundle's paths hold
+    std::fs::copy(t.path().join("examples/leave.ringi"), t.path().join("examples/休暇.ringi")).unwrap();
+    let run_gen = |out: &str, more: &[&str]| -> (i32, String, String) {
+        let mut a = vec!["gen", "examples/休暇.ringi", "examples/expense.ringi", "--root", ".", "--out", out, "--target", "requests", "--catalog", CATALOG, "--extra", "wasm", "--extra", "bundle"];
+        a.extend(more);
+        ritsu_in(t.path(), &a)
+    };
+    let (code, stdout, err) = run_gen("out", &[]);
+    assert_eq!(code, 0, "{stdout}{err}");
+    let (req, zip_path) = (t.path().join("out/requests"), t.path().join("out/requests.zip"));
+    let zip = std::fs::read(&zip_path).unwrap();
+    let on_disk: BTreeMap<String, Vec<u8>> = files_under(&req).into_iter().map(|f| (f.clone(), std::fs::read(req.join(&f)).unwrap())).collect();
+    let held: BTreeMap<String, Vec<u8>> = ritsu::package::zip::read(&zip).unwrap_or_else(|e| panic!("{}", e.en)).into_iter().collect();
+    assert_eq!(held.keys().collect::<Vec<_>>(), on_disk.keys().collect::<Vec<_>>(), "the zip holds other files than requests/");
+    assert!(held == on_disk, "a file of the zip is not the one in requests/");
+    for f in ["kinds.wasm", "wasm.json", "bundle.json", "types/leave.json", "openapi.json", "source/examples/休暇.ringi", "source/examples/expense.ringi", "source/examples/shared/company.ringi", "source/examples/shared/office.cal"] {
+        assert!(held.contains_key(f), "the bundle holds no {f}");
+    }
+    let about = ritsu_base::json::parse(&String::from_utf8(held["bundle.json"].clone()).unwrap()).unwrap();
+    assert_eq!(about.get("bundle").and_then(Json::as_int), Some(1));
+    assert!(about.get("diff").unwrap().is_null());
+    let sources: Vec<(String, String)> = about.get("sources").and_then(Json::as_arr).unwrap().iter().map(|s| (s.get("path").and_then(Json::as_str).unwrap().to_string(), s.get("sha256").and_then(Json::as_str).unwrap().to_string())).collect();
+    let under: Vec<&String> = held.keys().filter(|p| p.starts_with("source/")).collect();
+    assert_eq!(sources.iter().map(|(p, _)| p).collect::<Vec<_>>(), under, "bundle.json lists other files than source/ holds");
+    for (p, sha) in &sources {
+        assert_eq!(*sha, ritsu_base::sha256::hex(&held[p]), "{p}");
+        let rel = p.strip_prefix("source/").unwrap();
+        assert!(held[p] == std::fs::read(t.path().join(rel)).unwrap(), "{p} is not the project's file");
+        assert!(ritsu_project::project::kind_of(rel).is_some(), "{p} is no file of a language");
+        assert!(!rel.starts_with("examples/org/") && !rel.starts_with("examples/masters/"), "the bundle holds data: {p}");
+    }
+    println!("the bundle holds the {} files of requests/, {} of them the files the kinds are made from", held.len(), sources.len());
+    read_elsewhere(&t.path().join("read-bundle"), &zip_path, &held);
+    // what the examples' bundle does not hold: an empty file, large files stored and compressed, and
+    // names in Japanese
+    let mut x: u64 = 0x2545_f491_4f6c_dd1d;
+    let mut noise = |n: usize| -> Vec<u8> {
+        (0..n)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                x as u8
+            })
+            .collect()
+    };
+    let lines: String = (0..120_000).map(|i| format!("{{\"line\":{i},\"word\":\"{}\"}}\n", ["申請", "承認", "差し戻し", "却下"][i % 4])).collect();
+    let mut odd = noise(1 << 20);
+    odd.extend(b"abc".repeat(300_000));
+    odd.extend(noise(1 << 20));
+    let made: BTreeMap<String, Vec<u8>> = [
+        ("empty".to_string(), Vec::new()),
+        ("空のディレクトリの下/空".to_string(), Vec::new()),
+        ("日本語の名前/申請の種類.md".to_string(), "# 申請の種類\n\n経費の申請と休暇の申請。\n".repeat(50).into_bytes()),
+        ("large/noise.bin".to_string(), noise(3 << 20)),
+        ("large/lines.jsonl".to_string(), lines.into_bytes()),
+        ("large/mixed.bin".to_string(), odd),
+        ("one".to_string(), b"x".to_vec()),
+    ]
+    .into_iter()
+    .collect();
+    let z = ritsu::package::zip::write(&made.iter().map(|(p, b)| (p.clone(), b.clone())).collect::<Vec<_>>()).unwrap_or_else(|e| panic!("{}", e.en));
+    let made_path = t.path().join("made.zip");
+    std::fs::write(&made_path, &z).unwrap();
+    assert!(ritsu::package::zip::read(&z).unwrap_or_else(|e| panic!("{}", e.en)).into_iter().collect::<BTreeMap<_, _>>() == made);
+    read_elsewhere(&t.path().join("read-made"), &made_path, &made);
+    // the same input, the same zip
+    let (code, stdout, err) = run_gen("again", &[]);
+    assert_eq!(code, 0, "{stdout}{err}");
+    assert!(std::fs::read(t.path().join("again/requests.zip")).unwrap() == zip, "the zip is written otherwise from the same input");
+    // `--check`: clean, then a file of the bundle changed by hand
+    let (code, stdout, err) = run_gen("out", &["--check"]);
+    assert_eq!(code, 0, "{stdout}{err}");
+    let copy = req.join("source/examples/expense.ringi");
+    let original = std::fs::read(&copy).unwrap();
+    std::fs::write(&copy, [original.as_slice(), b"\n"].concat()).unwrap();
+    let (code, stdout, err) = run_gen("out", &["--check"]);
+    assert_eq!(code, 1, "{stdout}{err}");
+    let stale = said_of(&stdout, "generated file is stale or hand-edited: ");
+    assert!(stale.len() == 1 && stale[0].ends_with("source/examples/expense.ringi"), "{stdout}");
+    std::fs::write(&copy, &original).unwrap();
+    let mut changed = zip.clone();
+    changed[40] ^= 1;
+    std::fs::write(&zip_path, &changed).unwrap();
+    let (code, stdout, err) = run_gen("out", &["--check"]);
+    assert_eq!(code, 1, "{stdout}{err}");
+    let stale = said_of(&stdout, "generated file is stale or hand-edited: ");
+    assert!(stale.len() == 1 && stale[0].ends_with("requests.zip"), "{stdout}");
+    std::fs::write(&zip_path, &zip).unwrap();
+    // `--diff-from`: the leave's route changed, against the bundle before
+    let src = std::fs::read_to_string(t.path().join("examples/休暇.ringi")).unwrap();
+    std::fs::write(t.path().join("examples/休暇.ringi"), src.replace("route standard(long: days > 5)", "route standard(long: days > 3)")).unwrap();
+    let (code, stdout, err) = run_gen("next", &["--diff-from", "out/requests.zip"]);
+    assert_eq!(code, 0, "{stdout}{err}");
+    let next = t.path().join("next/requests");
+    let about = ritsu_base::json::parse(&std::fs::read_to_string(next.join("bundle.json")).unwrap()).unwrap();
+    let diff = about.get("diff").unwrap();
+    assert_eq!(diff.get("base").and_then(Json::as_str), Some(ritsu_base::sha256::hex(&zip).as_str()));
+    assert_eq!(
+        diff.get("kinds").unwrap().compact(),
+        r#"[{"name":"expense","from":1,"to":1,"differs":false,"en":"diff/expense.en.md","ja":"diff/expense.ja.md"},{"name":"leave","from":1,"to":1,"differs":true,"en":"diff/leave.en.md","ja":"diff/leave.ja.md"}]"#
+    );
+    let page = |f: &str| std::fs::read_to_string(next.join(f)).unwrap();
+    assert!(page("diff/leave.en.md").contains("### Requests where “Business days” is from 4 to 5: the stage “head” (dept_head) comes"), "{}", page("diff/leave.en.md"));
+    assert!(page("diff/leave.ja.md").contains("`examples/休暇.ringi` → `examples/休暇.ringi`"), "{}", page("diff/leave.ja.md"));
+    assert!(page("diff/expense.ja.md").contains("二つは同じことを言い、同じに答えます。"), "{}", page("diff/expense.ja.md"));
+    assert!(ritsu::package::zip::read(&std::fs::read(t.path().join("next/requests.zip")).unwrap()).unwrap().iter().any(|(p, _)| p == "diff/leave.ja.md"));
+    // the bundle before as a directory: the same pages; bundle.json names no zip
+    let args = ["gen", "examples/休暇.ringi", "examples/expense.ringi", "--root", ".", "--out", "next", "--target", "requests", "--catalog", CATALOG, "--extra", "wasm", "--extra", "bundle", "--diff-from", "out/requests", "--check", "--format", "json"];
+    let (code, stdout, err) = ritsu_in(t.path(), &args);
+    assert_eq!(code, 1, "{stdout}{err}");
+    let j = ritsu_base::json::parse(&stdout).unwrap();
+    let status = |end: &str| j.get("files").and_then(Json::as_arr).unwrap().iter().find(|f| f.get("path").and_then(Json::as_str).is_some_and(|p| p.ends_with(end))).and_then(|f| f.get("state").and_then(Json::as_str)).unwrap_or("none").to_string();
+    assert_eq!([status("diff/leave.en.md"), status("diff/leave.ja.md"), status("diff/expense.en.md"), status("requests/bundle.json"), status("requests.zip")], ["same", "same", "same", "stale", "stale"], "{stdout}");
+    assert_eq!(j.get("extras").unwrap().compact(), r#"["wasm","bundle"]"#);
+    // a `--diff-from` that is no bundle
+    for (from, said) in [
+        ("examples/leave.ringi", "error: `--diff-from examples/leave.ringi` cannot be read as a bundle: it does not end with the end of a central directory with no comment, as a zip ritsu writes does\n"),
+        ("examples", "error: `--diff-from examples` cannot be read as a bundle: it holds no `wasm.json`\n"),
+    ] {
+        let (code, stdout, err) = run_gen("nothing", &["--diff-from", from]);
+        assert_eq!((code, err.as_str()), (2, said), "{stdout}");
+        assert!(!t.path().join("nothing").exists());
+    }
+    // a run that does not ask for the bundle says its files, and leaves them
+    let args = ["gen", "examples/休暇.ringi", "examples/expense.ringi", "--root", ".", "--out", "next", "--target", "requests", "--catalog", CATALOG, "--extra", "wasm", "--check"];
+    let (code, stdout, err) = ritsu_in(t.path(), &args);
+    let left = said_of(&stdout, "generated no more, and still there: ");
+    for end in ["requests.zip", "requests/bundle.json", "requests/source/examples/休暇.ringi", "requests/diff/leave.ja.md"] {
+        assert!(left.iter().any(|p| p.ends_with(end)), "{end} is not said:\n{stdout}{err}");
+    }
+    assert_eq!(code, 0, "{stdout}{err}");
+    assert!(t.path().join("next/requests.zip").is_file() && next.join("diff/leave.ja.md").is_file());
+}
 
 /// `--target requests` writes, once for the project, what is apart from any language (ringi's
 /// DESIGN 12.2): each kind's description and vectors, the server's API with an operation of each
@@ -1767,6 +2264,131 @@ fn a_computation_past_int64_in_the_generated_code_stops_gen() {
     }
 }
 
+/// A host of `<out>/requests/kinds.wasm` in Node, as a server is one (ringi's DESIGN 12.6): it reads
+/// `wasm.json`, refuses a module whose SHA-256 is not the one written there or that imports
+/// anything, and calls each line of a file of [`call_lines`] through the door as `wasm.json` says
+/// (the function and the parts of the entry, `now` where it takes one, the answer of a kind whose
+/// form works nothing out). Each part is first held to what the crate's own entries hold it to
+/// (kaname's DESIGN 16.4): nested no deeper than 512, counted outside its strings, then one value
+/// of JSON. It prints the language of `wasm.json`, then a line for each call: the value, or
+/// `{kind, error, path}` (what the door says fails or refuses, by its kind).
+const KINDS_HOST: &str = r#"import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+
+const [dir, calls] = process.argv.slice(2);
+const about = JSON.parse(readFileSync(dir + "/wasm.json", "utf8"));
+const bytes = readFileSync(dir + "/" + about.file);
+if (createHash("sha256").update(bytes).digest("hex") !== about.sha256) throw new Error("the module is not the one wasm.json says");
+const mod = new WebAssembly.Module(bytes);
+if (WebAssembly.Module.imports(mod).length !== 0) throw new Error("the module imports " + JSON.stringify(WebAssembly.Module.imports(mod)));
+const ex = new WebAssembly.Instance(mod, {}).exports;
+const [call, realloc, post, memory] = [ex[about.exports.call], ex[about.exports.realloc], ex[about.exports.post_return], ex[about.exports.memory]];
+const enc = new TextEncoder();
+const dec = new TextDecoder("utf-8", { fatal: true });
+// numbers as they are written, so that an integer past 2^53 is printed as the door wrote it
+const read = (s) => JSON.parse(s, (_k, v, ctx) => (typeof v === "number" ? JSON.rawJSON(ctx.source) : v));
+function door(line) {
+  const b = enc.encode(line);
+  const p = realloc(0, 0, 1, b.length);
+  new Uint8Array(memory.buffer, p, b.length).set(b);
+  const r = call(p, b.length);
+  const v = new DataView(memory.buffer);
+  const s = dec.decode(new Uint8Array(memory.buffer, v.getUint32(r, true), v.getUint32(r + 4, true)).slice());
+  post(r);
+  return read(s);
+}
+function deep(text) {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 92) i++;
+      else if (c === 34) inString = false;
+    } else if (c === 34) inString = true;
+    else if (c === 91 || c === 123) {
+      if (++depth > 512) return true;
+    } else if ((c === 93 || c === 125) && depth > 0) depth--;
+  }
+  return false;
+}
+const ja = about.lang === "ja";
+const said = (name, fun, tooDeep) =>
+  ja
+    ? "関数 `" + fun + "` の引数 `" + name + "` は、" + (tooDeep ? "512 段より深く入れ子になっています" : "一つの JSON の値ではありません")
+    : "The argument `" + name + "` of `" + fun + "` " + (tooDeep ? "nests deeper than 512" : "is not one value of JSON");
+console.log(about.lang);
+for (const line of readFileSync(calls, "utf8").split("\n")) {
+  if (line === "") continue;
+  const [name, entry, now, ...parts] = line.split("	");
+  const k = about.kinds.find((x) => x.name === name);
+  if (k === undefined) {
+    console.log(JSON.stringify({ kind: "other", error: "no such kind: " + name, path: null }));
+    continue;
+  }
+  const f = entry === "start" ? k.start : entry === "worked" ? k.worked : k.next;
+  let wrong = null;
+  const ins = [];
+  for (const [i, n] of f.in.entries()) {
+    if (deep(parts[i])) wrong = { kind: "input", error: said(n, f.function, true), path: n };
+    else {
+      try {
+        JSON.parse(parts[i]);
+      } catch {
+        wrong = { kind: "input", error: said(n, f.function, false), path: n };
+      }
+    }
+    if (wrong !== null) break;
+    ins.push(JSON.stringify(n) + ":" + parts[i]);
+  }
+  if (wrong !== null) {
+    console.log(JSON.stringify(wrong));
+    continue;
+  }
+  if (f.now) ins.push('"now":' + now);
+  const a = door('{"module":' + JSON.stringify(k.module) + ',"function":' + JSON.stringify(f.function) + ',"in":{' + ins.join(",") + "}}");
+  if ("out" in a) console.log(JSON.stringify("answer" in f ? f.answer : a.out));
+  else if ("fails" in a) console.log(JSON.stringify({ kind: a.fails.kind, error: a.fails.message, path: a.fails.path ?? null }));
+  else if ("refused" in a) console.log(JSON.stringify({ kind: a.refused, error: a.error, path: a.path ?? null }));
+  else console.log(JSON.stringify({ kind: "other", error: JSON.stringify(a), path: null }));
+}
+"#;
+
+/// Whether the Wasm of the requests is built and run: rustc's level, with the standard library of
+/// wasm32-unknown-unknown, and Node's (a SKIP saying which is missing when not).
+fn wasm_ready() -> bool {
+    ready(Need::Rustc, have_wasm32, "the standard library of wasm32-unknown-unknown is not installed (rustup target add wasm32-unknown-unknown); the Wasm of the requests is not built") && ritsu_testkit::need(Need::Node)
+}
+
+/// The calls of `calls` (a file of [`call_lines`]) through `<requests>/kinds.wasm` by [`KINDS_HOST`],
+/// in `dir`: the language it says, and a line for each call.
+fn wasm_calls(dir: &Path, requests: &Path, calls: &Path) -> (String, String) {
+    std::fs::create_dir_all(dir).unwrap();
+    let host = dir.join("wasm_host.mjs");
+    std::fs::write(&host, KINDS_HOST).unwrap();
+    let o = ritsu_testkit::run::finish(Command::new("node").arg(&host).arg(requests).arg(calls), RUN, "node, running the host of the Wasm");
+    assert!(o.ok, "the host of the Wasm:\n{}", o.both());
+    let (lang, rest) = o.stdout.split_once('\n').unwrap_or((o.stdout.as_str(), ""));
+    (lang.to_string(), rest.to_string())
+}
+
+/// `ritsu`, run in `dir` as [`ritsu_in`] runs it, with `env` set (a value of None taken away).
+fn ritsu_with(dir: &Path, args: &[&str], env: &[(&str, Option<&std::ffi::OsStr>)]) -> (i32, String, String) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+    c.current_dir(dir).args(args);
+    for v in common::LANG_VARS {
+        c.env_remove(v);
+    }
+    for (k, v) in env {
+        match v {
+            Some(v) => c.env(k, v),
+            None => c.env_remove(k),
+        };
+    }
+    let o = c.output().expect("could not run ritsu");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
 /// The drivers of [`json_out_of_the_contract_is_said_alike_in_the_four_languages`]: as [`TS_DRIVER`]
 /// and the others, but first the language the list of the kinds says its entries' sentences are in,
 /// and what stops a call printed as `{"kind": …, "error": …, "path": …}`, the kind, the message and
@@ -2344,6 +2966,46 @@ fn json_out_of_the_contract_is_said_alike_in_the_four_languages() {
             Some("The argument `input` of `worked_out` is not one value of JSON".into()),
             Some("関数 `worked_out` の引数 `input` は、一つの JSON の値ではありません".into()),
         ),
+        // an argument nested as deep as the entries read, and one deeper (kaname's DESIGN 16.4): the
+        // deeper is said so in every language before it is read as JSON, so that one opened past the
+        // depth and never closed is said so too; brackets in a string, after an escaped quote, are
+        // no nesting
+        (
+            "nested 512 deep: submit",
+            "start",
+            "submit",
+            "",
+            Do::Spell(format!("{}{}", "[".repeat(512), "]".repeat(512))),
+            Some("The argument `submit` of `start` is an array, and must be an object".into()),
+            Some("関数 `start` の引数 `submit` が配列です。オブジェクトが要ります".into()),
+        ),
+        (
+            "nested 513 deep: submit",
+            "start",
+            "submit",
+            "",
+            Do::Spell(format!("{}{}", "[".repeat(513), "]".repeat(513))),
+            Some("The argument `submit` of `start` nests deeper than 512".into()),
+            Some("関数 `start` の引数 `submit` は、512 段より深く入れ子になっています".into()),
+        ),
+        (
+            "opened 513 deep and never closed: organization",
+            "start",
+            "organization",
+            "",
+            Do::Spell(r#"{"a":"#.repeat(513)),
+            Some("The argument `organization` of `start` nests deeper than 512".into()),
+            Some("関数 `start` の引数 `organization` は、512 段より深く入れ子になっています".into()),
+        ),
+        (
+            "brackets in a string: submit.requester",
+            "start",
+            "submit",
+            "/requester",
+            Do::Spell(format!(r#"["\"{}\\"]"#, "[{".repeat(600))),
+            Some("The argument `submit.requester` of `start` is an array, and must be a string".into()),
+            Some("関数 `start` の引数 `submit.requester` が配列です。文字列が要ります".into()),
+        ),
         // the time, an integer outside its range, which the module's check of the entry says
         (
             "a time before 1970: now",
@@ -2405,12 +3067,17 @@ fn json_out_of_the_contract_is_said_alike_in_the_four_languages() {
         };
         lines.push_str(&format!("{kind}\t{entry}\t{now}\t{}\n", parts.join("\t")));
     }
+    // the Wasm of the crate, called as a server calls it ([`KINDS_HOST`])
+    let wasm = wasm_ready();
     for lang in ["en", "ja"] {
         let out = t.path().join(format!("out-{lang}"));
         let o = out.to_string_lossy().into_owned();
         let mut args = vec!["gen", "examples/leave.ringi", "--root", ".", "--out", &o, "--module", MODULE, "--lang", lang];
         for target in ["typescript", "python", "go", "rust"] {
             args.extend(["--target", target]);
+        }
+        if wasm {
+            args.extend(["--target", "requests", "--catalog", CATALOG, "--extra", "wasm"]);
         }
         let (code, stdout, err) = ritsu_in(t.path(), &args);
         assert_eq!(code, 0, "{stdout}{err}");
@@ -2519,6 +3186,12 @@ fn json_out_of_the_contract_is_said_alike_in_the_four_languages() {
             let o = ritsu_testkit::run::finish(Command::new(rust_target("ritsu-rust").join("debug").join(&bin)).arg("calls.tsv").current_dir(&dir), RUN, "the driver of Rust");
             assert!(o.ok, "the driver:\n{}", o.both());
             check("Rust", &o.stdout);
+        }
+        if wasm {
+            let calls = out.join("calls.tsv");
+            std::fs::write(&calls, &lines).unwrap();
+            let (said, printed) = wasm_calls(&t.path().join(format!("wasm-wrong-{lang}")), &out.join("requests"), &calls);
+            check("Wasm", &format!("{said}\n{printed}"));
         }
         let said_otherwise = said_otherwise.take();
         assert!(said_otherwise.is_empty(), "{}", said_otherwise.join("\n"));

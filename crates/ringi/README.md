@@ -310,6 +310,7 @@ wrote lowered/values.rule
 A JSON outside the contract given to `start` or `next` is refused at the entry, before the machine runs, with one sentence the four languages write alike: where it is, what was given and what is needed (``The argument `submit.form.days` of `start` is "three", and must be an integer``).
 A field of any of ritsu's types with a unit (an amount, a rate, a quantity) is generated, computed fields too, and the screens show it in the steps of its unit.
 `ritsu gen --target requests` writes what a server and its screens read, once for the project: the kinds of request, the server's API as OpenAPI 3.1, the tools an agent is given, the screens as A2UI 1.0 messages with ritsu's catalog and the functions they call, the schema of the organization's data, and the vectors.
+With `--extra wasm`, it builds the code of Rust into one module of WebAssembly, `requests/kinds.wasm`, which a server loads to run every kind with no build of its own; with `--extra bundle`, it puts `requests/` and the files the kinds are made from in one zip, `requests.zip`, and with `--diff-from` the pages of `ringi diff` against the bundle before.
 [docs/reference.md](docs/reference.md#what-gen-writes) has what each file holds and what the server adds.
 
 ## The server
@@ -383,7 +384,7 @@ Each is in English, and with Japanese names beside it as `<name>.ja.ringi`; they
 - The five requests of the examples, in English and with Japanese names, and the shared organization, masters and route pass the check, and say the same at the same places in both; in the two versions of the organization they say only what the data of a version makes them say.
 - Every diagnostic code has the smallest file that prints it, in English and in Japanese, and the fixes its notes show pass the check when written in.
 - The ticket machine runs the scenarios of the examples and of 25 requests written for it, each as written, in English and in Japanese; for every scenario's form, it takes every person of both versions as the requester to the end of the ticket, and does what `simulate` and the check say, in no more business days than the check counts.
-- The code `ritsu gen` writes in TypeScript, Python, Go and Rust answers the 10,100 vectors of the examples and the machine's requests as the machine does (ritsu's `tests/gen_requests.rs`), and passes `tsc --strict`, `mypy --strict`, `go vet` and `cargo clippy -- -D warnings`.
+- The code `ritsu gen` writes in TypeScript, Python, Go and Rust, and the module of WebAssembly `--extra wasm` builds of it, answer the 11,141 vectors of the examples and the machine's requests as the machine does (ritsu's `tests/gen_requests.rs`); the code passes `tsc --strict`, `mypy --strict`, `go vet` and `cargo clippy -- -D warnings`.
 - The screens are validated against A2UI 1.0 and ritsu's catalog, and the functions they call answer the vectors under Node as the machine does.
 - The pages of `doc` and `diff` are golden files, and the lowered files of each example are golden files that pass the checks of their languages.
 - The checks across the languages each have the shapes that hold, that do not and that cannot be decided, as golden files in English and in Japanese (ritsu's `tests/cross.rs`).

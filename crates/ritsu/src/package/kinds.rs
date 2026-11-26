@@ -140,6 +140,17 @@ pub fn file(target: Target, modules: &[(Rc<Checked>, String)], kinds: &[Kind], o
     Some((path(target, o), body))
 }
 
+/// The kinds of `kinds` whose glue is among `modules`, in the order of the list, as a host of the
+/// package's Wasm calls them through the crate's door (`--extra wasm`): each with the name its
+/// module declares, which the door knows it by, and whether its form works something out.
+pub fn door(modules: &[(Rc<Checked>, String)], kinds: &[Kind]) -> Vec<super::wasm::Door> {
+    kinds
+        .iter()
+        .filter_map(|k| modules.iter().find(|(_, rel)| *rel == k.glue).map(|(c, _)| (k, c)))
+        .map(|(k, c)| super::wasm::Door { name: k.name.clone(), version: k.version, module: c.module.name.text.clone(), works: c.decls.fns.iter().any(|f| f.name.text == WORKED_OUT) })
+        .collect()
+}
+
 const ABOUT: &str = "The kinds of request of the package, each with its name, its version and its entries `start`, `next` and `worked`, which take the JSON of the contract and answer it; a server runs every kind from this list alone.";
 const CONTRACT_DOC: &str = "The version of the contract the kinds keep: the JSON of a ticket, an event, the part of the organization and an answer, and what `start`, `next` and `worked` take and answer. A server refuses a package whose number it does not know.";
 const LANG_DOC: &str = "The language the sentences of the entries' errors are written in, `en` or `ja`: the language the package was written in (`ritsu gen --lang`). A refusal of the machine holds its sentence in both (`text` and `text_ja`).";
@@ -153,8 +164,8 @@ const WORKED_DOC: &str = "What the form works out: given the JSON of a form fill
 
 /// The names of the glue's functions the entry `worked` calls: what the form works out, and, for a
 /// form that works nothing out, the reading of what it is given.
-const WORKED_OUT: &str = "worked_out";
-const WORKED_NONE: &str = "worked_none";
+pub(super) const WORKED_OUT: &str = "worked_out";
+pub(super) const WORKED_NONE: &str = "worked_none";
 
 /// What `worked` answers of a kind whose form works nothing out, in each language.
 const NONE_WORKED_TS: &str = r#""{\"fields\":{}}""#;
@@ -224,12 +235,13 @@ fn rust(found: &[(&Kind, usize)], modules: &[Rc<Checked>], contract: u32, genera
         let doc = if works(*i) { String::new() } else { format!("/// {}\n", none_doc(&k.name)) };
         s.push_str(&format!("{doc}{allow}fn worked_{n}(input: &str) -> Result<String, EntryError> {{\n    {worked}\n}}\n\n"));
     }
-    // the sentence of a part that is no value of JSON, as kaname's readers say it (its DESIGN 16.4)
-    let not_json = match lang {
-        ritsu_base::text::Lang::En => "The argument `{name}` of `{function}` is not one value of JSON",
-        ritsu_base::text::Lang::Ja => "関数 `{function}` の引数 `{name}` は、一つの JSON の値ではありません",
+    // the sentences of a part nested deeper than the entries of the other languages read, and of
+    // one that is no value of JSON, as kaname's readers say them (its DESIGN 16.4)
+    let (deep, not_json) = match lang {
+        ritsu_base::text::Lang::En => ("The argument `{name}` of `{function}` nests deeper than @DEPTH@", "The argument `{name}` of `{function}` is not one value of JSON"),
+        ritsu_base::text::Lang::Ja => ("関数 `{function}` の引数 `{name}` は、@DEPTH@ 段より深く入れ子になっています", "関数 `{function}` の引数 `{name}` は、一つの JSON の値ではありません"),
     };
-    s.push_str(&RUST_CALL.replace("@NOT_JSON@", not_json));
+    s.push_str(&RUST_CALL.replace("@DEEP@", deep).replace("@NOT_JSON@", not_json).replace("@DEPTH@", &kaname::r#gen::harness::ENTRY_DEPTH.to_string()));
     s
 }
 
@@ -242,6 +254,9 @@ fn call(module: &str, function: &str, parts: &[(&str, &str)], now: Option<i64>) 
     let mut line = format!("{{\"module\":\"{module}\",\"function\":\"{function}\",\"in\":{{");
     for (name, text) in parts {
         let b = text.as_bytes();
+        if deep(b) {
+            return Err(EntryError { path: Some(name.to_string()), message: format!("@DEEP@") });
+        }
         if value_end(b, 0, 0).map(|i| space(b, i)) != Some(b.len()) {
             return Err(EntryError { path: Some(name.to_string()), message: format!("@NOT_JSON@") });
         }
@@ -280,6 +295,28 @@ fn call(module: &str, function: &str, parts: &[(&str, &str)], now: Option<i64>) 
         (None, Some(message)) => Err(EntryError { path, message }),
         (None, None) => Err(EntryError { path: None, message: answer }),
     }
+}
+
+/// Whether a part nests deeper than the entries of the other languages read (@DEPTH@): its arrays
+/// and objects one inside another, counted outside its strings.
+fn deep(b: &[u8]) -> bool {
+    let (mut depth, mut string, mut i) = (0usize, false, 0);
+    while let Some(&c) = b.get(i) {
+        match c {
+            b'\\' if string => i += 1,
+            b'"' => string = !string,
+            b'[' | b'{' if !string => {
+                depth += 1;
+                if depth > @DEPTH@ {
+                    return true;
+                }
+            }
+            b']' | b'}' if !string => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        i += 1;
+    }
+    false
 }
 
 /// The text of a JSON string, written with its quotes and escapes.

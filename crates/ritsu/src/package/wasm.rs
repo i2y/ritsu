@@ -1,0 +1,437 @@
+//! `--extra wasm` (ringi's DESIGN 12.6): the project's package of Rust, the crate `--target rust`
+//! writes, built for wasm32-unknown-unknown with `ritsu_emit::wasm::CARGO_LINE` into one module,
+//! `<out>/requests/kinds.wasm`, which a server loads to run the kinds of request with no code of
+//! their own built into it; and `<out>/requests/wasm.json`, how the server calls it. The module
+//! imports nothing and exports `call` (kaname's DESIGN 36.10–36.12); a kind's entry is a line of JSON
+//! to the crate's door, as the list of the kinds of request of Rust writes it (`ticket_kinds.rs`).
+//!
+//! - The crate is built where nothing else is: in a directory of its own under the system's
+//!   temporary directory, removed after, with cargo's home and target there too and no `CARGO_*`,
+//!   `RUSTFLAGS` or wrapper of rustc from the environment, so that what one machine's settings say
+//!   does not change the bytes. Its manifest leaves out the dependencies it has for every target
+//!   but wasm32 (the drivers the clients of the books wait on), which cargo would otherwise look
+//!   for in its registry: the module is built with nothing to fetch (`--offline`). The paths the
+//!   module holds are the crate's own, from its root (`glue/ticket.rs`), and the standard library's,
+//!   which its toolchain names (`/rustc/<commit>/library/…`): the same crate and the same toolchain
+//!   give the same bytes wherever they are built.
+//! - Without cargo, or without the standard library of wasm32-unknown-unknown, nothing is written,
+//!   and the run says how to get them.
+//! - `--check` builds nothing. `wasm.json` records the digest of the crate as it was built (its
+//!   files, and the line that built it) and that of the module: the module is what the run writes
+//!   when both are those of the crate the run makes and of the module on the disk. A toolchain is
+//!   no part of what is checked, as ritsu's version is no part of a lock (DESIGN 17.4): the same
+//!   check passes in CI with no toolchain for wasm32, and `wasm.json` says which rustc built the
+//!   module.
+
+use super::{Refusal, refusal};
+use ritsu_base::json::Json;
+use ritsu_base::text::Lang;
+use ritsu_base::tr;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// The module, in `<out>/requests/`.
+pub const MODULE: &str = "kinds.wasm";
+
+/// How a server calls it, beside it.
+pub const ABOUT: &str = "wasm.json";
+
+/// The version of the shape of `wasm.json`: a reader refuses one it does not know.
+pub const SHAPE: u32 = 1;
+
+/// The target the module is built for.
+const TARGET: &str = "wasm32-unknown-unknown";
+
+/// A kind of request as a host calls it through the door: its name and version, the name its
+/// module declares (what the door knows it by), and whether its form works something out (its
+/// glue's `worked_out`; else `worked_none`, whose answer is no field).
+pub struct Door {
+    pub name: String,
+    pub version: u32,
+    pub module: String,
+    pub works: bool,
+}
+
+/// What `--extra wasm` comes to: the module, and `wasm.json`. Under `--check`, the module is the
+/// one on the disk when it is what the run writes, and None when it is not (missing, or not the
+/// build of the crate the run makes).
+pub struct Made {
+    pub module: Option<Vec<u8>>,
+    pub about: String,
+}
+
+/// The module and `wasm.json` of the crate `files` (the package of Rust, each file by its path under
+/// the crate) named `name`, for the kinds `kinds`, with the contract's version and the language of
+/// the entries' errors (`lang`, `en` or `ja`). Under `check`, nothing is built: `dir` is
+/// `<out>/requests/`, whose `wasm.json` and module are read. `said` is the language of a refusal.
+pub fn make(files: &[(String, String, Option<String>)], name: &str, kinds: &[Door], contract: u32, lang: &str, check: bool, dir: &Path, said: Lang) -> Result<Made, Refusal> {
+    let built = for_wasm(files);
+    let source = source_digest(&built);
+    if check {
+        let module = std::fs::read(dir.join(MODULE)).ok();
+        let recorded = std::fs::read_to_string(dir.join(ABOUT)).ok().and_then(|t| ritsu_base::json::parse(&t).ok());
+        let field = |k: &str| recorded.as_ref().and_then(|j| j.get(k)).and_then(Json::as_str).map(str::to_string);
+        let built_field = |k: &str| recorded.as_ref().and_then(|j| j.get("built")).and_then(|b| b.get(k)).and_then(Json::as_str).map(str::to_string);
+        let sha = module.as_deref().map(ritsu_base::sha256::hex).or_else(|| field("sha256")).unwrap_or_default();
+        let fresh = module.is_some() && field("sha256").as_deref() == Some(sha.as_str()) && built_field("source").as_deref() == Some(source.as_str());
+        let rustc = built_field("rustc").unwrap_or_default();
+        return Ok(Made { module: module.filter(|_| fresh), about: about(kinds, contract, lang, &sha, &source, &rustc) });
+    }
+    let (module, rustc) = build(&built, name, said)?;
+    let sha = ritsu_base::sha256::hex(&module);
+    Ok(Made { about: about(kinds, contract, lang, &sha, &source, &rustc), module: Some(module) })
+}
+
+/// The crate as the module is built from it: its files, with a manifest that leaves out what it
+/// depends on for every target but wasm32 (`[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`,
+/// the drivers of the books' clients, which the module leaves out with the clients), by their paths,
+/// in the order of their bytes.
+fn for_wasm(files: &[(String, String, Option<String>)]) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = files.iter().map(|(p, text, _)| (p.clone(), if p == "Cargo.toml" { without_native(text) } else { text.clone() })).collect();
+    out.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    out
+}
+
+/// A manifest without the table of what the crate depends on for every target but wasm32: the
+/// table's header and its lines, up to the next table or the end.
+fn without_native(toml: &str) -> String {
+    let mut out = String::new();
+    let mut skipping = false;
+    for line in toml.split_inclusive('\n') {
+        if line.trim_end() == super::rust::NOT_WASM32 {
+            skipping = true;
+            // the blank line before the table goes with it
+            if out.ends_with("\n\n") {
+                out.pop();
+            }
+            continue;
+        }
+        if skipping && line.starts_with('[') {
+            skipping = false;
+        }
+        if !skipping {
+            out.push_str(line);
+        }
+    }
+    out
+}
+
+/// The digest of the crate as it is built: the line that builds it, then each file's path and
+/// bytes, each written after its length in eight bytes, big-endian; in hexadecimal.
+fn source_digest(files: &[(String, String)]) -> String {
+    let mut b: Vec<u8> = Vec::new();
+    let mut put = |bytes: &[u8]| {
+        b.extend((bytes.len() as u64).to_be_bytes());
+        b.extend(bytes);
+    };
+    put(ritsu_emit::wasm::CARGO_LINE.as_bytes());
+    for (p, text) in files {
+        put(p.as_bytes());
+        put(text.as_bytes());
+    }
+    ritsu_base::sha256::hex(&b)
+}
+
+/// `wasm.json`: the head, the shape's version, the contract's, the language of the entries' errors,
+/// the module's file and digest, the names of its exports, each kind with the line its entries are
+/// called with, and how the module was built (the digest of the crate, rustc's version, the line).
+fn about(kinds: &[Door], contract: u32, lang: &str, sha: &str, source: &str, rustc: &str) -> String {
+    let entry = |function: &str, takes: &[&str], now: bool| {
+        Json::obj([("function", Json::str(function)), ("in", Json::arr(takes.iter().map(|t| Json::str(*t)))), ("now", Json::Bool(now))])
+    };
+    let kind = |k: &Door| {
+        let worked = if k.works {
+            entry(super::kinds::WORKED_OUT, &["input"], false)
+        } else {
+            let mut pairs = match entry(super::kinds::WORKED_NONE, &["input"], false) {
+                Json::Obj(p) => p,
+                _ => unreachable!("an entry is an object"),
+            };
+            pairs.push(("answer".to_string(), Json::obj([("fields", Json::obj(Vec::<(String, Json)>::new()))])));
+            Json::Obj(pairs)
+        };
+        Json::obj([
+            ("name", Json::str(&k.name)),
+            ("version", Json::int(i128::from(k.version))),
+            ("module", Json::str(&k.module)),
+            ("start", entry("start", &["submit", "organization"], true)),
+            ("next", entry("next", &["ticket", "event", "organization"], true)),
+            ("worked", worked),
+        ])
+    };
+    let j = Json::obj([
+        ("//", Json::str(ritsu_emit::header::generated("ritsu"))),
+        ("wasm", Json::int(i128::from(SHAPE))),
+        ("contract", Json::int(i128::from(contract))),
+        ("lang", Json::str(lang)),
+        ("file", Json::str(MODULE)),
+        ("sha256", Json::str(sha)),
+        ("exports", Json::obj([("call", Json::str("call")), ("realloc", Json::str("cabi_realloc")), ("post_return", Json::str("cabi_post_call")), ("memory", Json::str("memory"))])),
+        ("kinds", Json::arr(kinds.iter().map(kind))),
+        ("built", Json::obj([("source", Json::str(source)), ("rustc", Json::str(rustc)), ("cargo", Json::str(ritsu_emit::wasm::CARGO_LINE))])),
+    ]);
+    format!("{}\n", j.pretty())
+}
+
+/// A directory of its own under the system's temporary directory, removed with it.
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new() -> std::io::Result<Scratch> {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static N: AtomicU32 = AtomicU32::new(0);
+        let base = std::env::temp_dir();
+        loop {
+            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+            let d = base.join(format!("ritsu-wasm-{}-{}-{stamp}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+            match std::fs::create_dir(&d) {
+                Ok(()) => return Ok(Scratch(d)),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The program of a tool: the variable's (`CARGO`, `RUSTC`), as cargo reads them, else its name on
+/// the path.
+fn tool(var: &str, name: &str) -> std::ffi::OsString {
+    std::env::var_os(var).filter(|v| !v.is_empty()).unwrap_or_else(|| name.into())
+}
+
+/// A command of a tool, run in `dir` with nothing of cargo's or rustc's settings from the
+/// environment but the tools themselves: cargo's home and target directory are the run's own.
+fn clean(program: &std::ffi::OsString, dir: &Path, scratch: &Path) -> Command {
+    let mut c = Command::new(program);
+    c.current_dir(dir);
+    for (k, _) in std::env::vars_os() {
+        let k = k.to_string_lossy().into_owned();
+        if k.starts_with("CARGO_") || ["RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"].contains(&k.as_str()) {
+            c.env_remove(&k);
+        }
+    }
+    c.env("CARGO_HOME", scratch.join("cargo-home")).env("CARGO_TARGET_DIR", scratch.join("target"));
+    c
+}
+
+/// The words of a line of the shell with no quote but `'…'` ([`ritsu_emit::wasm::CARGO_LINE`]).
+fn words(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut word = String::new();
+    let mut quoted = false;
+    let mut any = false;
+    for c in line.chars() {
+        match c {
+            '\'' => {
+                quoted = !quoted;
+                any = true;
+            }
+            ' ' if !quoted => {
+                if any {
+                    out.push(std::mem::take(&mut word));
+                }
+                any = false;
+            }
+            c => {
+                word.push(c);
+                any = true;
+            }
+        }
+    }
+    if any {
+        out.push(word);
+    }
+    out
+}
+
+/// How to get what the build needs, said when it is missing.
+fn get_rust() -> ritsu_base::text::Text {
+    tr!(
+        "Rust のツールチェーンを入れてください（https://rustup.rs）。入れたあと `rustup target add {TARGET}` で Wasm の標準ライブラリも入れます",
+        "install Rust's toolchain (https://rustup.rs), then the standard library of Wasm with `rustup target add {TARGET}`"
+    )
+}
+
+/// The crate built for wasm32-unknown-unknown: the module, and what `rustc -V` says of the compiler.
+fn build(files: &[(String, String)], name: &str, said: Lang) -> Result<(Vec<u8>, String), Refusal> {
+    let (cargo, rustc) = (tool("CARGO", "cargo"), tool("RUSTC", "rustc"));
+    let scratch = Scratch::new().map_err(|e| refusal(2, ritsu_base::cli::cannot_create(&std::env::temp_dir().display().to_string(), &e), said))?;
+    let dir = scratch.0.join("crate");
+    let ran = |c: &mut Command| c.output();
+    let get = get_rust();
+    let missing = |what: &str| refusal(2, tr!("`--extra wasm` は、{what} が見つからないので、何も書きません。", "`--extra wasm` cannot find {what}, so nothing is written; ").then(&get), said);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return Err(refusal(2, ritsu_base::cli::cannot_create(&dir.display().to_string(), &e), said));
+    }
+    match ran(clean(&cargo, &dir, &scratch.0).arg("-V")) {
+        Ok(o) if o.status.success() => {}
+        _ => return Err(missing("cargo")),
+    }
+    let version = match ran(clean(&rustc, &dir, &scratch.0).arg("-V")) {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        _ => return Err(missing("rustc")),
+    };
+    // the standard library of the target: rustc names its directory whether it is there or not
+    let libdir = match ran(clean(&rustc, &dir, &scratch.0).args(["--print", "target-libdir", "--target", TARGET])) {
+        Ok(o) if o.status.success() => Some(PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())),
+        _ => None,
+    };
+    let has_core = libdir.and_then(|d| std::fs::read_dir(d).ok()).is_some_and(|rd| rd.flatten().any(|e| e.file_name().to_string_lossy().starts_with("libcore-")));
+    if !has_core {
+        return Err(refusal(
+            2,
+            tr!(
+                "`--extra wasm` は、{version} に {TARGET} の標準ライブラリが無いので、何も書きません。`rustup target add {TARGET}` で入れてください",
+                "`--extra wasm` finds no standard library of {TARGET} for {version}, so nothing is written; install it with `rustup target add {TARGET}`"
+            ),
+            said,
+        ));
+    }
+    for (rel, text) in files {
+        let p = dir.join(rel);
+        if let Some(parent) = p.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            return Err(refusal(2, ritsu_base::cli::cannot_create(&parent.display().to_string(), &e), said));
+        }
+        if let Err(e) = std::fs::write(&p, text) {
+            return Err(refusal(2, ritsu_base::cli::cannot_write(&p.display().to_string(), &e), said));
+        }
+    }
+    let line = words(ritsu_emit::wasm::CARGO_LINE);
+    let (program, args) = line.split_first().expect("the line names cargo");
+    debug_assert_eq!(program, "cargo");
+    let (sub, rest) = args.split_first().expect("the line names cargo's command");
+    let o = match ran(clean(&cargo, &dir, &scratch.0).arg(sub).args(["--offline", "--quiet"]).args(rest)) {
+        Ok(o) => o,
+        Err(_) => return Err(missing("cargo")),
+    };
+    if !o.status.success() {
+        let err = String::from_utf8_lossy(&o.stderr);
+        let tail: Vec<&str> = err.lines().rev().take(40).collect::<Vec<_>>().into_iter().rev().collect();
+        let tail = tail.join("\n");
+        return Err(refusal(
+            2,
+            tr!(
+                "Rust のパッケージを {TARGET} に組めませんでした。ritsu の不具合です。報告してください（{version}）\n{tail}",
+                "the package of Rust does not build for {TARGET}: a bug in ritsu, please report it ({version})\n{tail}"
+            ),
+            said,
+        ));
+    }
+    let out = scratch.0.join("target").join(TARGET).join("release").join(format!("{name}.wasm"));
+    let module = std::fs::read(&out).map_err(|e| refusal(2, ritsu_base::cli::cannot_read(&out.display().to_string(), &e), said))?;
+    if let Err(why) = shape(&module) {
+        return Err(refusal(
+            2,
+            tr!("組んだ Wasm が、約束の形ではありません（{why}）。ritsu の不具合です。報告してください", "the Wasm built is not of the shape it keeps ({why}): a bug in ritsu, please report it"),
+            said,
+        ));
+    }
+    Ok((module, version))
+}
+
+/// The exports a host calls the module through, and of what kind each is (0 a function, 2 a memory).
+pub const EXPORTS: [(&str, u8); 4] = [("call", 0), ("cabi_realloc", 0), ("cabi_post_call", 0), ("memory", 2)];
+
+/// Whether a module is of the shape a server takes: it imports nothing, and exports [`EXPORTS`].
+/// Err with what is not.
+pub fn shape(b: &[u8]) -> Result<(), String> {
+    fn leb(b: &[u8], i: &mut usize) -> Result<u64, String> {
+        let (mut n, mut shift) = (0u64, 0u32);
+        loop {
+            let byte = *b.get(*i).ok_or("the module ends inside a number")?;
+            *i += 1;
+            n |= u64::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return Ok(n);
+            }
+            shift += 7;
+            if shift > 35 {
+                return Err("a number of the module is too long".into());
+            }
+        }
+    }
+    fn name(b: &[u8], i: &mut usize) -> Result<String, String> {
+        let n = leb(b, i)? as usize;
+        let s = b.get(*i..*i + n).ok_or("the module ends inside a name")?;
+        *i += n;
+        Ok(String::from_utf8_lossy(s).into_owned())
+    }
+    if b.get(..8) != Some(b"\0asm\x01\0\0\0") {
+        return Err("it is no module of Wasm 1".into());
+    }
+    let mut i = 8;
+    let mut exports: Vec<(String, u8)> = Vec::new();
+    while i < b.len() {
+        let id = b[i];
+        i += 1;
+        let size = leb(b, &mut i)? as usize;
+        let end = i.checked_add(size).filter(|e| *e <= b.len()).ok_or("a section ends past the module")?;
+        let mut j = i;
+        match id {
+            2 => {
+                let n = leb(b, &mut j)?;
+                if n > 0 {
+                    let (m, f) = (name(b, &mut j)?, name(b, &mut j)?);
+                    return Err(format!("it imports {n}, the first `{m}`.`{f}`"));
+                }
+            }
+            7 => {
+                for _ in 0..leb(b, &mut j)? {
+                    let n = name(b, &mut j)?;
+                    let kind = *b.get(j).ok_or("the module ends inside an export")?;
+                    j += 1;
+                    leb(b, &mut j)?;
+                    exports.push((n, kind));
+                }
+            }
+            _ => {}
+        }
+        i = end;
+    }
+    for (n, kind) in EXPORTS {
+        if !exports.iter().any(|(e, k)| e == n && *k == kind) {
+            return Err(format!("it does not export `{n}`"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_line_is_split_as_the_shell_splits_it() {
+        let w = words(ritsu_emit::wasm::CARGO_LINE);
+        assert_eq!(&w[..3], ["cargo", "rustc", "--lib"]);
+        assert!(w.contains(&"profile.release.opt-level=\"s\"".to_string()), "{w:?}");
+        assert!(w.contains(&"profile.release.strip=\"symbols\"".to_string()), "{w:?}");
+        assert_eq!(w.iter().filter(|x| *x == "--config").count(), 4);
+    }
+
+    #[test]
+    fn the_table_of_native_dependencies_is_left_out() {
+        let toml = format!("[package]\nname = \"p\"\n\n[lib]\npath = \"lib.rs\"\n\n{}\nsqlx = \"=0.9.0\"\ntokio = \"=1\"\n", super::super::rust::NOT_WASM32);
+        assert_eq!(without_native(&toml), "[package]\nname = \"p\"\n\n[lib]\npath = \"lib.rs\"\n");
+        assert_eq!(without_native("[package]\nname = \"p\"\n"), "[package]\nname = \"p\"\n");
+    }
+
+    #[test]
+    fn a_module_that_imports_or_lacks_an_export_is_said() {
+        assert!(shape(b"not wasm").is_err());
+        // no section at all: none of the exports
+        assert_eq!(shape(b"\0asm\x01\0\0\0"), Err("it does not export `call`".to_string()));
+        // an import section with one import, `env`.`f`, a function of type 0
+        let mut m = b"\0asm\x01\0\0\0".to_vec();
+        m.extend([2, 9, 1, 3, b'e', b'n', b'v', 1, b'f', 0, 0]);
+        assert_eq!(shape(&m), Err("it imports 1, the first `env`.`f`".to_string()));
+    }
+}
