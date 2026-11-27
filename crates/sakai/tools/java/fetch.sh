@@ -1,7 +1,8 @@
 #!/bin/sh
 # The jars the ArchUnit test of sakai runs with (PLAN 0.4), fetched from Maven Central into
 # tools/java/lib. Each jar is held to the SHA-256 written here; one that differs is removed and
-# the script stops. tools/java/lib is not in git.
+# the script stops. tools/java/lib is not in git. Maven Central answers 429 when too many come from
+# one address, as the runners of CI share theirs, and curl tries again on it, as on a 5xx.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -17,7 +18,7 @@ digest() {
 fetch() {
   jar="$2-$3.jar"
   if [ ! -f "$lib/$jar" ]; then
-    curl -fsSL -o "$lib/$jar.part" "$central/$1/$2/$3/$jar"
+    curl -fsSL --retry 10 --retry-max-time 600 -o "$lib/$jar.part" "$central/$1/$2/$3/$jar"
     mv "$lib/$jar.part" "$lib/$jar"
   fi
   got=$(digest "$lib/$jar")

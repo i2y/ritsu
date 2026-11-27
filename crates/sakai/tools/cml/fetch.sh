@@ -3,7 +3,7 @@
 # opened into tools/cml/context-mapper-cli-6.12.0. sakai's test does not run the CLI itself: its
 # `cm validate` reads the syntax only (DESIGN 0.4). It runs Validate.java on the jars of lib/,
 # which runs the semantic checks of Context Mapper's Xtext validator. Neither the zip nor what
-# it opens into is in git.
+# it opens into is in git. curl tries again on a 429 of Maven Central, as java/fetch.sh does.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -15,7 +15,7 @@ digest() {
 }
 
 if [ ! -f "$here/$zip" ]; then
-  curl -fsSL -o "$here/$zip.part" "https://repo1.maven.org/maven2/org/contextmapper/context-mapper-cli/6.12.0/$zip"
+  curl -fsSL --retry 10 --retry-max-time 600 -o "$here/$zip.part" "https://repo1.maven.org/maven2/org/contextmapper/context-mapper-cli/6.12.0/$zip"
   mv "$here/$zip.part" "$here/$zip"
 fi
 got=$(digest "$here/$zip")
