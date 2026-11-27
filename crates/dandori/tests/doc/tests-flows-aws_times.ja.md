@@ -24,7 +24,7 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 29 | `mapping = read_from(…)` | `aws lambda:createEventSourceMapping` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 31 | `mapping = read_from(…)` | `aws lambda:createEventSourceMapping` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -32,5 +32,5 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 30 | `succeed mapping = mapping` |
+| 32 | `succeed mapping = mapping` |
 

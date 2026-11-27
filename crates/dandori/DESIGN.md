@@ -1469,7 +1469,7 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
   - ランナーは、終わっていない実行のどれかが 10 分（`DANDORI_ARGO_MINUTES`）止まっていた（ノードの始まりも終わりも無く、その Pod を演じてもいない）ときか、全部で 30 分を超えたときにあきらめる。そのときは、終わっていない実行のノードと Pod と、最後に動いてからの秒数を書いて落ちる。試験は、フローごとに、ランナーが始めてから最後の実行が終わるまでの秒数を出す（12 章）。
   - 演じる回の Workflow は、テンプレートの中身をそのまま持つ。`workflowTemplateRef` だと、コントローラーは各 Workflow の最初の検証で、テンプレートを解決するたびに WorkflowTemplate を API サーバーから読み直す。大きなテンプレートで百本を同時に流すと、API サーバーが詰まった。
   - フローごとに一本（宣言したエラーを通るものがあればそれ）は、本物の Pod でも走らせる。`argo submit --from` と同じく WorkflowTemplate から作り、スタブのコンテナがクラスタの中のモック（`tools/argo/mock.mjs`）に結果を聞く。
-  - コールバックの応答は `argo node set` と `argo resume` で渡し、タイムアウトのシナリオでは、タイムアウトしたときと同じ値を渡す。待ちは長さを 0 にしてすぐ進める。
+  - コールバックの応答は `argo node set` と `argo resume` で渡し、タイムアウトのシナリオでは、タイムアウトしたときと同じ値を渡す。待ちは長さを 0 にしてすぐ進める。`timeout until` のあるコールバックの待ちは、その時刻までの秒数（過ぎていれば 1 秒）だけ続くので、ランナーが答える前に終わることがある。シナリオは日付の呼び出しに、実行の今より前の時刻で答えることもある（2026-11-27 に `review.flow` の 7 本目で、承認の期限が過ぎていて、待ちが 1 秒で時間切れになった）。ランナーはどのコールバックにも答えるので、その待ちは 1 日にして走らせる（上限の試験では変えない）。
   - タスクのタイムアウトは起こせないので、それを含むシナリオは外す。並列のイテレーションは一つずつ回す（`withSequence` を持つテンプレートの `parallelism` を 1 にする）。タイムアウトが起きないように、テンプレートの `activeDeadlineSeconds` には 120 秒を足して走らせる（本物の Pod の起動が期限に入るので。4.4 と 5.1。上限の試験では足さない）。
 - **規則と日付の呼び出しの上限**（16 章）：`tests/limits/limits.flow` は、規則を Lambda（`urgency`）と Connect のサービス（`urgency_service`）で一度ずつ呼び、どちらも `on timeout` で受ける。platforms の段の五つの試験（`rule_limits_hold_on_temporal`・`rule_limits_hold_on_localstack`・`rule_limits_hold_on_durable`・`rule_limits_hold_on_argo`・`rule_limits_hold_on_pydantic_graph`）が、規則の代わりに 15 秒答えない相手を置いて本当の時間で走らせ、どの試しも 10 秒で時間切れになること、試しが 10 秒とリトライの待ち（1 秒と 2 秒）の間隔で来ること、そのあと参照インタプリタのとおりに `on timeout` へ進むことを、呼ばれた回数と時刻と、実行がたどったステップで確かめる。ランナーは、環境変数 `DANDORI_LIMITS` があると、ふだん縮める待ちとタイムアウトを縮めず、呼ばれた時刻（`times`）を書く。durable functions と pydantic-graph の試験は Node か Python しか要らないが、本当の時間で一分ほど待つので、ほかの三つと同じく platforms の段で走らせる。
   - Temporal（TypeScript・Python・Go）：dev server の履歴から、規則のアクティビティの START_TO_CLOSE のタイムアウト 3 回と、あいだの 1 秒と 2 秒のタイマーを読む。
@@ -4387,6 +4387,7 @@ moto（AWS の API の代わりに手元で動くもの）の手前に、届い�
 - サービスが二つ以上のプロトコルの印を持つときは、restJson1、awsJson1_0、awsJson1_1、restXml、awsQuery、ec2Query、rpcv2Cbor の順で最初のものを読む。SDK がほかのプロトコルで送ると、表の形の欄と食い違う。
 - `document` のメンバーの中の日時は、文字列のまま渡す。秒より細かい端数は、TypeScript の Date ではミリ秒までになる。
 - 答えの blob（バイト列）を、各言語の `Transport` がどんな値で返すかは見ていない。この章が扱ったのは日時だけである。
+- LocalStack 4.14 の Step Functions は、AWS SDK の統合の答え（差し替えた答えも）のメンバーの名前を、botocore の形をたどって書き直す。大文字の続く名前は別の綴りになり、`UUID` は `Uuid` になる。そのため `aws_times` のレコードは `UUID` の代わりに `FunctionArn` を読む（2026-11-27）。LocalStack の試験の記録では、AWS は `ChecksumCRC32` をそのまま返し、LocalStack は `ChecksumCrc32` を返す。AWS が `UUID` をどう返すかは確かめていない。
 
 ## 43. `http` のタスクの引数を、記述が言う置き場と書き方で送る（2026-11-18）
 

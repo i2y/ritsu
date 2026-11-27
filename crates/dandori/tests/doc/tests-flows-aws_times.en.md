@@ -24,7 +24,7 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 29 | `mapping = read_from(…)` | `aws lambda:createEventSourceMapping` | — | — | `timeout`, `failure` → the workflow fails |
+| 31 | `mapping = read_from(…)` | `aws lambda:createEventSourceMapping` | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 
@@ -32,5 +32,5 @@ Every way the workflow can end.
 
 | Line | End |
 |---:|---|
-| 30 | `succeed mapping = mapping` |
+| 32 | `succeed mapping = mapping` |
 

@@ -24,7 +24,7 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 28 | `作った対応 = 読ませる(…)` | `aws lambda:createEventSourceMapping` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 30 | `作った対応 = 読ませる(…)` | `aws lambda:createEventSourceMapping` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -32,5 +32,5 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 29 | `succeed 対応 = 作った対応` |
+| 31 | `succeed 対応 = 作った対応` |
 

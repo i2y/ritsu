@@ -2,6 +2,8 @@
 # 行く。Lambda の API（restJson1）は、JSON の本文の日時を 1970 年からの秒（epoch-seconds）で
 # 受け取り、自分の日時も同じ形で答える。フローはどちらも RFC 3339 の文字列で持つ。どのプラット
 # フォームでも動く。既定の Transport は、ストリームと関数を置いた moto へこの呼び出しを送る。
+# レコードは UUID でなく FunctionArn を読む。LocalStack の Step Functions は AWS SDK の答えの
+# メンバーの名前を書き直し、大文字の続く名前は別の綴りになる（UUID は Uuid になる。DESIGN 42.6）。
 workflow ストリームの読み始め v1
 description "ある時刻から先のストリームのレコードを関数に読ませる。時刻を受け取り、別の時刻を答える AWS の API を使う"
 
@@ -10,7 +12,7 @@ use smithy lambda from "apis/lambda.json"
 enum 読み始め = TRIM_HORIZON | LATEST | AT_TIMESTAMP
 
 record 対応
-  UUID         : string
+  FunctionArn  : string
   State        : string
   LastModified : timestamp
 

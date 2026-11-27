@@ -2,7 +2,9 @@
 # says for where it goes: Lambda's API (restJson1) takes the one in its JSON body as seconds since
 # 1970 (epoch-seconds), and answers its own the same way, while the flow holds both as RFC 3339
 # text. Runs on every platform; the default Transports send the call to moto, which holds the
-# stream and the function.
+# stream and the function. The record reads FunctionArn and not UUID: LocalStack's Step Functions
+# writes the names of an AWS SDK answer's members again, and one with capitals in a row comes out
+# another way (UUID as Uuid; DESIGN 42.6).
 workflow aws_times v1
 description "Have a function read a stream's records from a moment on, through an AWS API that takes the moment and answers another"
 
@@ -11,7 +13,7 @@ use smithy lambda from "apis/lambda.json"
 enum Position = TRIM_HORIZON | LATEST | AT_TIMESTAMP
 
 record Mapping
-  UUID         : string
+  FunctionArn  : string
   State        : string
   LastModified : timestamp
 
