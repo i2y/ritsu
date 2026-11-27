@@ -56,7 +56,7 @@ const RESOURCES: &[(&str, &str, &str, &str, &str)] = &[
     (
         "rulec://docs/compatibility.md",
         "compatibility",
-        "1.x の版が守るもの——言語、答え、呼び方、CLI、コード、形式——と、変えてよいもの。",
+        "1.x の版が守るもの（言語、答え、呼び方、CLI、コード、形式）と、変えてよいもの。",
         "What every 1.x release keeps — the language, the answers, the calls, the CLI, the codes, the formats — and what it may change.",
         include_str!("../docs/compatibility.md"),
     ),
@@ -149,7 +149,7 @@ fn initialize(params: Option<&Json>) -> String {
             "instructions",
             &tr!(
                 "rulec は表の形の業務の規則（.rule ファイル）を、証明済みで依存の無いコードにします。\
-                 最初に資源 rulec://docs/agents.md を読んでください——手順と、エージェントが自分で\
+                 最初に資源 rulec://docs/agents.md を読んでください。手順と、エージェントが自分で\
                  決めてはいけないことが書いてあります。道具はどれも rulec のコマンド一つです。\
                  結果をデータとして受け取るには format \"json\" を渡してください。結果の最後の行は\
                  終了コードです: 0 は誤りなし、1 は指摘あり、2 は引数の誤り。",
