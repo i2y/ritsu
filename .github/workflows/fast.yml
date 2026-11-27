@@ -5,7 +5,8 @@ name: fast
 # naming.tsv, the JSON of `api`, the documents a test reads without running a tool. A test that
 # needs a tool says so in a SKIP line of the level and passes. `cargo xtask test` gathers the
 # SKIP lines, and one for something missing from the runner fails the job unless
-# ci/skips/fast.txt allows it: what did not run must not look as if it ran.
+# ci/skips/fast.txt allows it: what did not run must not look as if it ran. The tests run in three
+# jobs side by side: ringi's, ritsu's, and those of the other crates (DESIGN 10.5).
 
 on:
   push:
@@ -29,9 +30,23 @@ env:
 
 jobs:
   fast:
+    name: fast (${{ matrix.group }})
     runs-on: ubuntu-24.04
-    # The tests took 32 minutes (DESIGN 10.5)
-    timeout-minutes: 60
+    # In one job the tests outgrew 60 minutes once ringi's came in (DESIGN 10.5): at 0.55.2 they
+    # took 34 minutes, rulec's 17 and ritsu's 11; then ringi's took 28, and ritsu's were still
+    # running at 19 when the job reached its limit. Each group builds the workspace on its own.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: ringi
+            crates: -p ringi
+          - group: ritsu
+            crates: -p ritsu
+          # every crate of the workspace but the two above (a step below checks it)
+          - group: the others
+            crates: -p rulec -p sekisho -p chobo -p dandori -p geas -p kaname -p koyomi -p sakai -p yuen -p ritsu-base -p ritsu-cross -p ritsu-emit -p ritsu-model -p ritsu-ports -p ritsu-project -p ritsu-proto -p ritsu-testkit -p ritsu-units -p ritsu-wasm -p xtask
 
     steps:
       # Each run builds the workspace from nothing (the cache below keeps the crates it downloads,
@@ -77,25 +92,43 @@ jobs:
       # The page in the browser runs every language compiled to wasm32-unknown-unknown (DESIGN
       # 8.7). A language that reaches for what only Unix has (a process group, a signal) without
       # saying what to do elsewhere no longer builds there.
+      # The checks of the whole workspace run once, in the group of the other crates.
       - name: ritsu builds for the browser
+        if: matrix.group == 'the others'
         run: cargo check --locked -p ritsu-wasm --target wasm32-unknown-unknown
 
       # The layers of DESIGN 3.1: what each crate may depend on (DESIGN 3.4).
       - name: The dependencies keep to the layers
+        if: matrix.group == 'the others'
         run: cargo xtask deps
 
       # ritsu's own map (DESIGN 3.4, 7.13): sakai holds every crate's dependencies, as Cargo says
       # them, to the contexts of ritsu.ctx, and names the line of a Cargo.toml that goes against it.
       - name: The crates keep to ritsu's own map
+        if: matrix.group == 'the others'
         run: cargo run --locked -q -p ritsu -- check ritsu.ctx
 
       # The seed modules (DESIGN 17.18): what they hold passes against the sources they pin, on every
       # push, whether or not it is published.
       - name: The seed modules pass their checks
+        if: matrix.group == 'the others'
         run: |
           for module in modules/*/; do
             cargo run --locked -q -p ritsu -- check "$module"
           done
 
+      # A crate added to the workspace and to none of the groups would not be tested here.
+      - name: The groups hold every crate
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          want=$(cargo metadata --no-deps --format-version 1 --locked | jq -r '.packages[].name' | grep -v -x -e ringi -e ritsu | sort)
+          have=$(printf '%s\n' ${{ matrix.crates }} | grep -v -x -e -p | sort)
+          if [ "$want" != "$have" ]; then
+            echo "the workspace's crates (<) and this group's (>) differ:"
+            diff <(echo "$want") <(echo "$have") || true
+            exit 1
+          fi
+
       - name: The tests of the fast level
-        run: cargo xtask test --level fast
+        run: cargo xtask test --level fast ${{ matrix.crates }}
