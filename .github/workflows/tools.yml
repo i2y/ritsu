@@ -594,8 +594,9 @@ jobs:
     name: npm (node ${{ matrix.node }}, ${{ matrix.os }}, part ${{ matrix.part }} of 2)
     runs-on: ${{ matrix.os }}
     # The four jobs took 74 to 85 minutes with every Node holding both comparisons whole; a part
-    # takes a third of that CPU, measured (DESIGN 10.5), about 32 minutes of a job
-    timeout-minutes: 60
+    # takes a third of that CPU, measured (DESIGN 10.5), about 32 minutes of a job. On macOS a part
+    # came to 54 minutes, 19 of them building the package, and one was cut at 60 (DESIGN 10.5)
+    timeout-minutes: 90
 
     strategy:
       fail-fast: false
