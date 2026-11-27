@@ -49,7 +49,10 @@ step sakai check "$map"
 step sekisho check --root "$crates/sekisho/examples/refunds" "$crates/sekisho/examples/refunds/refunds.gate"
 step kaname check "$crates/kaname/examples/late_payment/late_payment.kn"
 step ringi check "$crates/ringi/examples/expense.ringi"
-# ritsu itself: a project with a file of each language, each checked with its language's check and
-# then across them (the first project under ritsu's tests, whatever language it is written in)
-project=$(ls -d "$crates"/ritsu/tests/projects/*/ | head -n 1)
-step ritsu check "${project%/}"
+# ritsu itself: a project, each file checked with its language's check and then across them (the
+# first project under ritsu's tests in the order of the bytes of the names, so that every platform
+# checks the same one, whatever languages it is written in). It is checked as its own root, as its
+# tests check it: what people looked at in it is recorded with the paths from there.
+project=$(LC_ALL=C ls -d "$crates"/ritsu/tests/projects/*/ | head -n 1)
+project=${project%/}
+step ritsu check --root "$project" "$project"
