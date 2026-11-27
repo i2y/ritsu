@@ -20,6 +20,10 @@ on this repository.
 | [kaname](kaname/SKILL.md) | functional cores (`.kn`): general code with no input or output, and the code around rules, dates and books, held to ritsu's types, ranges and rounding, and generated for a host to call |
 | [ringi](ringi/SKILL.md) | a company's applications and approvals (`.ringi`): a kind of request of any department, with its form, its route and who approves each stage, checked against the organization's data for every requester, and generated as a ticket machine and as the API, the tools and the screens a server serves |
 
+The server that serves the request types of ringi, [ringi-server](https://github.com/i2y/ringi-server),
+has a skill of its own for the projects built on it, in [its repository](https://github.com/i2y/ringi-server/tree/main/skills):
+an agent working on such a project uses it with the skill of ringi.
+
 Each skill runs ritsu, so `ritsu` has to be on PATH; the [README](../README.md#install) says how to
 install it. Under the name of a language (a link named `rulec`, say) ritsu is that language, and
 `ritsu <language> …` runs it too.

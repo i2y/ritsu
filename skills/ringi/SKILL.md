@@ -17,7 +17,8 @@ and `ritsu gen` writes from it what a server runs on.
 
 It does not apply to the server itself (keeping the tickets, signing people in, sending mail and
 serving the screens: [ringi-server](https://github.com/i2y/ringi-server), a framework in Go, does
-that from what ritsu generates, and has its own documents), to a workflow
+that from what ritsu generates, and has its own documents and its own Agent Skill,
+`ringi-server`), to a workflow
 that runs after the approval (that is a flow of dandori the ticket launches), to the company-wide
 rules of who may do what (that is the gate of sekisho the request reads), or to the balance of a
 budget or of the days of leave (that is a book of chobo).
@@ -510,7 +511,8 @@ has the whole table. [ringi-server](https://github.com/i2y/ringi-server), a fram
 and `ritsu ringi init <dir> --module <path>` writes the first files of a project on it: a request type,
 its organization and gate, a server and its tests. When someone has no server yet, start there. The
 project's README says how to run it, and [ringi-server's site](https://i2y.github.io/ringi-server/) says
-what the project gives the server and how to run it for people.
+what the project gives the server and how to run it for people. An agent working on such a project
+reads ringi-server's own skill too ([its folder](https://github.com/i2y/ringi-server/tree/main/skills)).
 
 ## 8. What the language does not have
 

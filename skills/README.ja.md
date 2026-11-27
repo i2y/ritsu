@@ -16,6 +16,8 @@
 | [kaname](kaname/SKILL.md) | Functional Core（`.kn`）。入出力を持たない汎用のコードと、規則・日付・帳簿のまわりのコードを、ritsu の型、範囲、丸めで確かめ、ホストが呼ぶコードを生成する |
 | [ringi](ringi/SKILL.md) | 会社の申請と承認（`.ringi`）。どの部門の申請の種類も、フォーム、経路、ステップごとの承認者と一緒に書き、組織のデータと突き合わせてどの申請者でも確かめ、チケットの機械と、サーバーが配る API、道具、画面を生成する |
 
+ringi の申請の種類を動かすサーバー [ringi-server](https://github.com/i2y/ringi-server) には、それを使うプロジェクトのためのスキルが別にあります（[そのリポジトリ](https://github.com/i2y/ringi-server/tree/main/skills)）。そういうプロジェクトで働くエージェントは、ringi のスキルと一緒に使います。
+
 どのスキルも ritsu を動かすので、PATH に `ritsu` が要ります。入れ方は [README](../README.ja.md#入れ方) にあります。言語の名前で呼ぶと（`rulec` という名前のリンクなど）ritsu はその言語として動き、`ritsu <言語> …` でも同じです。
 
 ## 入れ方
