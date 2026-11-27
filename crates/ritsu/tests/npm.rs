@@ -13,6 +13,11 @@
 //! - `what_needs_another_program_says_so`: a command that starts another program or reaches the
 //!   network stops in the package with the language's own head and exit code, saying why and what
 //!   to run instead (ritsu-base's `wasi`).
+//! - `ringi_init_writes_as_the_binary_does`: `ritsu ringi init` writes the project the binary
+//!   writes, byte for byte, and says what it says.
+//! - `no_code_the_package_runs_asks_std_for_what_wasi_has_not`: no code built into the package asks
+//!   std for the process's id or the system's temporary directory, which panic under WASI (no node
+//!   needed).
 //! - `a_module_command_that_needs_the_network_says_so`: so do the commands of `ritsu mod` that need
 //!   curl, git or cosign (DESIGN 17.22), with dependencies from registries and from git
 //!   repositories, and they change neither the module nor the store.
@@ -1079,6 +1084,7 @@ for (let l = line(); l !== null; l = line()) {
             ("crates/geas/examples", "geas"),
             ("crates/chobo/examples", "chobo"),
             ("crates/sakai/tests/maps/rust", "sakai"),
+            ("crates/ringi/examples", "ringi"),
         ] {
             ritsu_testkit::tmp::copy_dir(&root().join(from), &w.join(into));
         }
@@ -1121,6 +1127,8 @@ for (let l = line(); l !== null; l = line()) {
             ("sakai", vec!["sakai", "check", "shop.ctx"], 1, &cargo, false),
             ("sakai", vec!["ritsu", "sakai", "check", "shop.ctx", "--lang", "ja"], 1, &cargo, true),
             ("sakai", vec!["ritsu", "check", "shop.ctx"], 1, &cargo, false),
+            ("ringi", vec!["ritsu", "gen", "leave.ringi", "--root", ".", "--out", "out", "--target", "requests", "--catalog", "https://requests.example.com/a2ui/catalog.json", "--extra", "wasm"], 2, &cargo, false),
+            ("ringi", vec!["ritsu", "gen", "leave.ringi", "--root", ".", "--out", "out", "--target", "requests", "--catalog", "https://requests.example.com/a2ui/catalog.json", "--extra", "wasm", "--lang", "ja"], 2, &cargo, true),
         ];
         let mut wrong = Vec::new();
         for (at, cmd, code, said, japanese) in &cases {
@@ -1619,6 +1627,87 @@ process.stdout.write(JSON.stringify({ code: r.code, stdout: r.stdout, stderr: r.
     /// The bins of the package, each by its name.
     fn bins() -> Vec<(String, String)> {
         std::iter::once("ritsu").chain(LANGUAGES).map(|n| (n.to_string(), format!("bin/{n}.js"))).collect()
+    }
+
+    /// No code the package runs asks std for what WASI has not, where std panics and the package
+    /// said "a bug in ritsu": the process's id (`process::id`) and the system's temporary directory
+    /// (`env::temp_dir`). A run names its files with ritsu-base's `wasi::run_id` and makes them under
+    /// `wasi::temp_dir`. Each source file of the crates is read up to its first `#[cfg(test)]`; the
+    /// files that keep a call are those two functions' own, the scratch of `--extra wasm`, which gen
+    /// refuses under WASI before it checks anything, and the store's, which under WASI writes in the
+    /// store or says it has no place. No node needed.
+    #[test]
+    fn no_code_the_package_runs_asks_std_for_what_wasi_has_not() {
+        let kept: [(&str, &[&str]); 2] = [
+            ("process::id()", &["crates/ritsu-base/src/wasi.rs", "crates/ritsu/src/package/wasm.rs"]),
+            ("env::temp_dir()", &["crates/ritsu-base/src/wasi.rs", "crates/ritsu/src/package/wasm.rs", "crates/ritsu/src/modules/store_write.rs"]),
+        ];
+        let mut asked = Vec::new();
+        let mut files = 0;
+        for c in std::fs::read_dir(root().join("crates")).unwrap() {
+            let c = c.unwrap().path();
+            let name = c.file_name().unwrap().to_string_lossy().into_owned();
+            // the test kit and the task runner are never built into the package
+            if name == "ritsu-testkit" || name == "xtask" {
+                continue;
+            }
+            let mut dirs = vec![c.join("src")];
+            while let Some(d) = dirs.pop() {
+                let Ok(rd) = std::fs::read_dir(&d) else { continue };
+                for e in rd {
+                    let p = e.unwrap().path();
+                    if p.is_dir() {
+                        dirs.push(p);
+                    } else if p.extension().is_some_and(|x| x == "rs") {
+                        files += 1;
+                        let text = std::fs::read_to_string(&p).unwrap();
+                        let head = text.split("\n#[cfg(test)]\n").next().unwrap();
+                        let rel = p.strip_prefix(root()).unwrap().to_string_lossy().replace('\\', "/");
+                        for (call, keep) in &kept {
+                            if head.contains(call) && !keep.contains(&rel.as_str()) {
+                                asked.push(format!("{rel}: {call}"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(files > 500, "read only {files} source files");
+        assert!(asked.is_empty(), "these ask std for what the package has not; use ritsu_base::wasi::run_id() and ritsu_base::wasi::temp_dir(): {asked:?}");
+    }
+
+    /// `ritsu ringi init` by the package writes the project the binary writes, byte for byte, and
+    /// says what the binary says: in English, and in Japanese with the agents' tools and a flow
+    /// (ringi's DESIGN 16). It runs `ritsu gen` on a copy of the project under the system's
+    /// temporary directory, which the package takes from the environment (`wasi::temp_dir`).
+    #[test]
+    fn ringi_init_writes_as_the_binary_does() {
+        let t = TempDir::new("npm-package");
+        let Some(pkg) = package(&t) else { return };
+        let l = TempDir::new("npm-links");
+        let links = links(&l);
+        let mut wrong = Vec::new();
+        for args in [
+            &["ringi", "init", "approvals", "--module", "example.com/acme/approvals"][..],
+            &["ringi", "init", "approvals", "--module", "example.com/acme/approvals", "--lang", "ja", "--mcp", "--temporal"],
+        ] {
+            let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            let shown = args.join(" ");
+            let (a, b) = (TempDir::new("npm-init-native"), TempDir::new("npm-init-package"));
+            let one = native(&links, "ritsu", &args, a.path(), None);
+            assert_eq!(one.code, Some(0), "native `ritsu {shown}`: {one:?}");
+            let two = npm(&pkg, "ritsu", &args, b.path(), None);
+            if one != two {
+                wrong.push(format!("`ritsu {shown}` by the package says {two:?}, and by the binary {one:?}"));
+            }
+            let (x, y) = (tree(a.path()), tree(b.path()));
+            if x != y {
+                let differ: std::collections::BTreeSet<&String> = x.keys().chain(y.keys()).filter(|k| x.get(*k) != y.get(*k)).collect();
+                wrong.push(format!("`ritsu {shown}` by the package writes otherwise: {differ:?}"));
+            }
+        }
+        println!("npm: `ritsu ringi init` writes and says what the binary does, in English and in Japanese");
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     }
 
     /// packaging/npm/package.json: the workspace's version and the binary's license, the ten bins,

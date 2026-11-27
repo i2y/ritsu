@@ -1706,7 +1706,7 @@ fn temp_beside(path: &Path) -> PathBuf {
     static N: AtomicU32 = AtomicU32::new(0);
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
     let name = path.file_name().map(|x| x.to_string_lossy().into_owned()).unwrap_or_else(|| "out".into());
-    path.with_file_name(format!(".{name}.ritsu-tmp-{}-{}-{stamp}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+    path.with_file_name(format!(".{name}.ritsu-tmp-{}-{}-{stamp}", ritsu_base::wasi::run_id(), N.fetch_add(1, Ordering::Relaxed)))
 }
 
 /// Refuse a write through a link below the package's directory, naming the link.
@@ -2192,6 +2192,11 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     let diff_from = a.get("--diff-from").map(str::to_string);
     if diff_from.is_some() && !extras.contains(&"bundle") {
         return say(refusal(2, tr!("`--diff-from` は `--extra bundle` と一緒に使います", "`--diff-from` goes with `--extra bundle`"), lang), answer);
+    }
+    // `--extra wasm` builds with cargo, and built for WASI no program starts: said before anything
+    // is checked or written (DESIGN 8.8)
+    if extras.contains(&"wasm") && cfg!(target_os = "wasi") {
+        return say(refusal(2, ritsu_base::wasi::cannot_start("cargo"), lang), answer);
     }
     // the screens' catalog (ringi's DESIGN 13.2): its ID is a name for the project's catalog, written
     // as a URL the project owns, the same in every environment, which only the project knows:

@@ -392,7 +392,7 @@ fn run_limited(cmd: std::process::Command, limit: std::time::Duration) -> std::i
     use std::sync::atomic::{AtomicUsize, Ordering};
     static SEQ: AtomicUsize = AtomicUsize::new(0);
     let n = SEQ.fetch_add(1, Ordering::Relaxed);
-    let base = std::env::temp_dir().join(format!("rulec-mcp-{}-{n}", std::process::id()));
+    let base = ritsu_base::wasi::temp_dir().join(format!("rulec-mcp-{}-{n}", ritsu_base::wasi::run_id()));
     let (out_path, err_path) = (base.with_extension("out"), base.with_extension("err"));
     // The two files go however the run went, a command that would not start included (§15.163).
     let ran = run_into(cmd, limit, &out_path, &err_path);

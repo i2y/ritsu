@@ -545,7 +545,7 @@ fn scratch() -> Result<Scratch, LeanError> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    let dir = std::env::temp_dir().join(format!("kaname-lean-{}-{stamp}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let dir = ritsu_base::wasi::temp_dir().join(format!("kaname-lean-{}-{stamp}-{}", ritsu_base::wasi::run_id(), N.fetch_add(1, Ordering::Relaxed)));
     std::fs::create_dir_all(&dir).map_err(|e| LeanError::Io(ritsu_base::cli::cannot_create(&dir.display().to_string(), &e)))?;
     Ok(Scratch(dir))
 }

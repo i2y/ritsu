@@ -84,3 +84,19 @@ pub fn run_id() -> u64 {
         u64::from(std::process::id())
     }
 }
+
+/// The system's directory for temporary files, as std's `env::temp_dir` answers natively. Under
+/// WASI std's panics ("no filesystem on wasm"), so there it is the one the host's environment
+/// names (`TMPDIR`, else `TEMP` or `TMP`, as on Windows), else `/tmp`: the package opens it with
+/// the rest of the filesystem when the caller names no `dirs`, and where it is not open, a command
+/// says it cannot make its directory there.
+pub fn temp_dir() -> std::path::PathBuf {
+    #[cfg(target_os = "wasi")]
+    {
+        ["TMPDIR", "TEMP", "TMP"].iter().find_map(|k| std::env::var_os(k).filter(|v| !v.is_empty())).map_or_else(|| std::path::PathBuf::from("/tmp"), std::path::PathBuf::from)
+    }
+    #[cfg(not(target_os = "wasi"))]
+    {
+        std::env::temp_dir()
+    }
+}

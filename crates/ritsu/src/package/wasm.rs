@@ -462,6 +462,12 @@ fn toolchain() -> Option<String> {
 
 /// The crate built for wasm32-unknown-unknown: the module, and what `rustc -V` says of the compiler.
 fn build(files: &[(String, String)], name: &str, said: Lang) -> Result<(Vec<u8>, String), Refusal> {
+    // built for WASI no program starts, and the scratch directory needs the process's id and the
+    // system's temporary directory, which WASI has not: said before anything is made (gen says
+    // it before it checks anything; DESIGN 8.8)
+    if cfg!(target_os = "wasi") {
+        return Err(refusal(2, ritsu_base::wasi::cannot_start("cargo"), said));
+    }
     let (cargo, rustc) = (tool("CARGO", "cargo"), tool("RUSTC", "rustc"));
     let toolchain = toolchain();
     let scratch = match Scratch::new() {

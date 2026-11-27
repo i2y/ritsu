@@ -2197,8 +2197,11 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 | `chobo check --diff-base` | git | 2 |
 | `geas check`・`snap`・`drift`・`map` | 主張が動かすプログラム | 主張ごとに E030、check・snap・map は 1、drift は 2（`--jobs` は、スレッドを起こせなければ一つのスレッドで順に走らせる） |
 | `code rust` を書いた地図の `sakai check`（と `ritsu check`） | `cargo metadata` | E107 で、ほかの検査は続ける（Cargo が無いときと同じ道。exit 1） |
+| `ritsu gen --target requests --extra wasm` | cargo | 何も検査せず、何も書かずに `error: …`、2 |
 
-`tests/npm.rs` の `what_needs_another_program_says_so` が、26 のコマンドで、文と終了コードを確かめ、「a bug in ritsu」も std の文も出ないことを確かめる。
+`tests/npm.rs` の `what_needs_another_program_says_so` が、28 のコマンドで、文と終了コードを確かめ、「a bug in ritsu」も std の文も出ないことを確かめる。
+
+**std が止めてしまうもの。** WASI の std は、プロセスの ID（`process::id`）と一時ディレクトリ（`env::temp_dir`）を求められると、`Unsupported` を返さずに panic する。パッケージはそれを「a bug in ritsu」と言って止まる。`gen` が書くファイルのとなりに置く一時ファイルと、`ritsu ringi init` が `ritsu gen` を走らせる作業場所が、これで止まったことがある。そこで、コマンドが一時ファイルの名前に入れる番号は ritsu-base の `wasi::run_id` を使う（ネイティブではプロセスの ID、WASI では一度だけ引く乱数）。一時ディレクトリは `wasi::temp_dir` を使う（ネイティブでは std のもの。WASI では環境の `TMPDIR`、無ければ `TEMP` か `TMP`、それも無ければ `/tmp`）。`tests/npm.rs` の `no_code_the_package_runs_asks_std_for_what_wasi_has_not` が、パッケージに入るコード（各ファイルの最初の `#[cfg(test)]` より前）にどちらの呼び出しも無いことを確かめる。呼び出しが残るのは三つのファイルだけである。その二つの関数を置く ritsu-base の `wasi`、WASI では `gen` が先に断る `--extra wasm` の作業場所、WASI では置き場の中に書くか、場所が無いと言うモジュールの置き場である。`ringi_init_writes_as_the_binary_does` は、パッケージの `ritsu ringi init` がバイナリと同じプロジェクトを書くことを確かめる。
 
 **時間帯。** `yuen review` は `--date` が無ければ、その機械のタイムゾーンの今日を使う（C ライブラリの `localtime_r`）。WASI の C ライブラリはタイムゾーンを知らないので、ローダーが、渡す環境の `TZ`（Intl が知っている名前なら）か、なければ Node の時計から求めた UTC からのずれの秒数を `RITSU_WASI_UTC_OFFSET` で渡し、yuen の `date.rs` がそれを読む（無ければ UTC）。時計や時間帯を読むところは、ほかに無い（`git grep` で `SystemTime`、`localtime`、`TZ` を見た。geas の時計は主張の時間を測るだけ）。
 

@@ -26,7 +26,7 @@ const OP_PONG: u8 = 10;
 fn fresh(n: usize) -> Vec<u8> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    let seed = format!("{nanos}-{}-{}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed));
+    let seed = format!("{nanos}-{}-{}", ritsu_base::wasi::run_id(), COUNTER.fetch_add(1, Ordering::Relaxed));
     let mut out = Vec::with_capacity(n);
     let mut block = sha1(seed.as_bytes());
     while out.len() < n {

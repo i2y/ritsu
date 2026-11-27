@@ -235,7 +235,7 @@ fn init(a: &Args, table: &Table, lang: Lang) -> Result<Text, Text> {
         let place = files.first().and_then(|(p, _)| p.rsplit_once('/').map(|(d, _)| d)).map_or_else(|| given.to_string(), |d| shown(d));
         return Err(cannot_create(&place, &e));
     }
-    let stage = dir.join(format!(".ritsu-init-{}", std::process::id()));
+    let stage = dir.join(format!(".ritsu-init-{}", ritsu_base::wasi::run_id()));
     for (path, text) in &files {
         let to = stage.join(path);
         if let Some(p) = to.parent()
@@ -526,7 +526,7 @@ struct Scratch(PathBuf);
 impl Scratch {
     fn new() -> Result<Scratch, Text> {
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-        let dir = std::env::temp_dir().join(format!("ritsu-ringi-init-{}-{nanos}", std::process::id()));
+        let dir = ritsu_base::wasi::temp_dir().join(format!("ritsu-ringi-init-{}-{nanos}", ritsu_base::wasi::run_id()));
         std::fs::create_dir_all(&dir).map_err(|e| cannot_create(&dir.display().to_string(), &e))?;
         Ok(Scratch(dir))
     }
