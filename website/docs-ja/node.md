@@ -51,6 +51,7 @@ $ npx ritsu gen --target typescript --check --format json --lang ja
   "targets": [
     "typescript"
   ],
+  "extras": [],
   "files": [
     {
       "target": "typescript",
