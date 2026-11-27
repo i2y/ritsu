@@ -83,6 +83,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import contextlib
+import faulthandler
 import importlib
 import json
 import logging
@@ -764,6 +765,11 @@ def main() -> None:
     replaying = sys.argv[1] == "--replay"
     serve_at: tuple[str, str] | None = None
     if replaying:
+        # A replay takes a second. One that stands still says where: every thread's stack goes to the
+        # standard error after four minutes, and after each four more (the test stops a runner at
+        # fifteen), and so do the SDK's warnings, such as a workflow task it failed.
+        faulthandler.dump_traceback_later(240, repeat=True)
+        logging.getLogger("temporalio").setLevel(logging.WARNING)
         package_dir, histories_dir, out_file = sys.argv[2:5]
         with open(os.path.join(histories_dir, "spec.json"), encoding="utf-8") as f:
             spec = json.load(f)
