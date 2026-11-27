@@ -42,6 +42,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -116,6 +119,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -209,6 +215,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -301,6 +310,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -355,6 +367,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -414,6 +429,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -493,6 +511,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -586,6 +607,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -640,6 +664,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -699,6 +726,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         },
         "x-ritsu-request": {
@@ -948,6 +978,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -1018,6 +1051,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -1095,6 +1131,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -1165,6 +1204,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -1235,6 +1277,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -1317,6 +1362,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -1397,6 +1445,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -1466,6 +1517,9 @@
           },
           "500": {
             "$ref": "#/components/responses/failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/unavailable"
           }
         }
       }
@@ -3784,6 +3838,25 @@
         "headers": {
           "Retry-After": {
             "description": "In how many seconds the comment may be sent again; only when it came too soon after the person's last comment on the ticket",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/error"
+            }
+          }
+        }
+      },
+      "unavailable": {
+        "description": "The server could not run the code of the kind of request just now: no instance of it was free, or the kind failed to answer the same event of the ticket less than a minute ago. Nothing was done, and the ticket is as it was: the same call is sent again after the seconds `Retry-After` says, an operation that moves a ticket with the same idempotency key",
+        "headers": {
+          "Retry-After": {
+            "description": "In how many seconds the call may be sent again",
             "schema": {
               "type": "integer",
               "minimum": 1

@@ -116,7 +116,7 @@ fn what_a_form_works_out_is_read_alone() {
             assert_eq!(str_at(op, &["requestBody", "content", "application/json", "schema", "$ref"]), format!("#/components/schemas/{n}.worked.in"), "{id}");
             assert_eq!(str_at(op, &["responses", "200", "content", "application/json", "schema", "$ref"]), format!("#/components/schemas/{n}.worked.out"), "{id}");
             assert_eq!(str_at(op, &["responses", "400", "$ref"]), "#/components/responses/unworked", "{id}");
-            assert_eq!(codes(op), ["200", "400", "401", "404", "413", "415", "500"], "{id}");
+            assert_eq!(codes(op), ["200", "400", "401", "404", "413", "415", "500", "503"], "{id}");
             assert_eq!(str_at(op, &["responses", "404", "$ref"]), if ticket { "#/components/responses/unseen" } else { "#/components/responses/unoffered" }, "{id}");
             let said = str_at(op, &["summary"]);
             let words: &[&str] = if ticket {
@@ -323,9 +323,10 @@ fn the_lists_come_in_pages_and_the_answers_are_said() {
     assert_eq!(kinds, d.types.len());
     for (id, codes) in [
         ("list_waiting", &["200", "400", "401", "500"][..]),
+        ("list_requests", &["200", "401", "500", "503"]),
         ("get_ticket", &["200", "401", "404", "500"]),
-        ("approve", &["200", "400", "401", "404", "409", "413", "415", "500"]),
-        ("comment", &["200", "400", "401", "404", "409", "413", "415", "429", "500"]),
+        ("approve", &["200", "400", "401", "404", "409", "413", "415", "500", "503"]),
+        ("comment", &["200", "400", "401", "404", "409", "413", "415", "429", "500", "503"]),
     ] {
         let got: Vec<&str> = operation(&d, id).get("responses").and_then(Json::as_obj).unwrap().iter().map(|(c, _)| c.as_str()).collect();
         assert_eq!(got, codes, "{id}");
@@ -340,6 +341,28 @@ fn the_lists_come_in_pages_and_the_answers_are_said() {
         }
     }
     assert_eq!(limited, ["comment"]);
+    // 503 is answered by the operations that run the kinds' code, and by no other: every operation
+    // that moves a ticket (it has an idempotency key), the working out of a form, and the list of
+    // the kinds a person may submit (it asks each kind)
+    for item in d.api.get("paths").and_then(Json::as_obj).unwrap().iter().map(|(_, i)| i) {
+        for (_, op) in item.as_obj().unwrap() {
+            let id = str_at(op, &["operationId"]);
+            let keyed = op.get("parameters").and_then(Json::as_arr).unwrap_or_default().iter().any(|p| p.get("$ref").and_then(Json::as_str) == Some("#/components/parameters/idempotency_key"));
+            let runs = keyed || id.starts_with("worked_") || id.starts_with("ticket_worked_") || id == "list_requests";
+            let answers = op.get("responses").and_then(|r| r.get("503"));
+            assert_eq!(answers.is_some(), runs, "{id}: 503 where the operation runs the code of a kind, and only there");
+            if let Some(a) = answers {
+                assert_eq!(str_at(a, &["$ref"]), "#/components/responses/unavailable", "{id}");
+            }
+        }
+    }
+    let unavailable = d.api.get("components").and_then(|c| c.get("responses")).and_then(|r| r.get("unavailable")).unwrap();
+    let said = str_at(unavailable, &["description"]);
+    for words in ["no instance of it was free", "less than a minute ago", "Nothing was done, and the ticket is as it was", "after the seconds `Retry-After` says", "with the same idempotency key"] {
+        assert!(said.contains(words), "{said}");
+    }
+    assert_eq!(str_at(unavailable, &["headers", "Retry-After", "schema", "type"]), "integer");
+    assert_eq!(str_at(unavailable, &["content", "application/json", "schema", "$ref"]), "#/components/schemas/error");
     let said = str_at(&d.api, &["components", "responses", "limited", "description"]);
     for words in ["how soon a person comments on a ticket again", "how many comments a ticket holds", "the ticket is as it was", "with the same idempotency key", "there is no `Retry-After`"] {
         assert!(said.contains(words), "{said}");

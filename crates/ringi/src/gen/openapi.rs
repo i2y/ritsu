@@ -491,7 +491,7 @@ fn body(schema: Json) -> Json {
 /// effect, …); of a comment alone (`limited`), the server's limits on comments; of an operation
 /// with a body (`body`), one too large or not JSON; and of every operation, no one signed in and the
 /// server failing. All but `ok` and a refusal hold their text in `error`.
-fn answered(ok: Json, refused: bool, unread: Option<&str>, unseen: Option<&str>, limited: bool, body: bool) -> Json {
+fn answered(ok: Json, refused: bool, unread: Option<&str>, unseen: Option<&str>, limited: bool, body: bool, runs: bool) -> Json {
     let at = |name: &str| Json::obj([("$ref", Json::str(format!("#/components/responses/{name}")))]);
     let mut o = vec![("200".to_string(), ok), ("401".into(), at("unsigned")), ("500".into(), at("failed"))];
     if refused {
@@ -509,6 +509,9 @@ fn answered(ok: Json, refused: bool, unread: Option<&str>, unseen: Option<&str>,
     if body {
         o.push(("413".into(), at("oversized")));
         o.push(("415".into(), at("not_json")));
+    }
+    if runs {
+        o.push(("503".into(), at("unavailable")));
     }
     o.sort_by(|a, b| a.0.cmp(&b.0));
     Json::Obj(o)
@@ -580,6 +583,13 @@ const UNWORKED: &str = "The request does not read: a body not of its shape (a va
 const LIMITED: &str = "Too many comments: the server limits how soon a person comments on a ticket again, and how many comments a ticket holds, and this one is not taken (no refusal of the machine, and the ticket is as it was). When it came too soon, `Retry-After` says in how many seconds it may be sent again, with the same idempotency key; when the ticket holds as many comments as the server takes, there is no `Retry-After`, for waiting does not change that";
 const RETRY_AFTER: &str = "In how many seconds the comment may be sent again; only when it came too soon after the person's last comment on the ticket";
 
+/// What the 503 of an operation that runs the code of a kind says (DESIGN 12.4): the moves, the
+/// working out of a form, and the list of the kinds a person may submit.
+const UNAVAILABLE: &str = "The server could not run the code of the kind of request just now: no instance of it was free, or the kind failed to answer the same event of the ticket less than a minute ago. Nothing was done, and the ticket is as it was: the same call is sent again after the seconds `Retry-After` says, an operation that moves a ticket with the same idempotency key";
+
+/// When a call answered 503 is sent again.
+const RETRY_UNAVAILABLE: &str = "In how many seconds the call may be sent again";
+
 fn json_response(text: &str, schema: Json) -> Json {
     Json::obj([("description", Json::str(text)), ("content", Json::obj([("application/json", Json::obj([("schema", schema)]))]))])
 }
@@ -599,7 +609,7 @@ fn moving(id: &str, tag: &str, summary: &str, body_schema: Json, ticket: bool, r
         ("summary".into(), Json::str(summary)),
         ("parameters".into(), params(ticket)),
         ("requestBody".into(), body(body_schema)),
-        ("responses".into(), answered(Json::obj([("$ref", Json::str("#/components/responses/moved"))]), true, Some("unread"), unseen, id == "comment", true)),
+        ("responses".into(), answered(Json::obj([("$ref", Json::str("#/components/responses/moved"))]), true, Some("unread"), unseen, id == "comment", true, true)),
     ];
     if let Some(k) = request {
         o.push(("x-ritsu-request".into(), Json::obj([("file", Json::str(&k.file)), ("name", Json::str(&k.named.name)), ("version", Json::int(k.version))])));
@@ -608,13 +618,14 @@ fn moving(id: &str, tag: &str, summary: &str, body_schema: Json, ticket: bool, r
 }
 
 /// An operation that reads: 400 for a query not as it takes (`unasked`), and the 404 it answers
-/// (`unseen`).
+/// (`unseen`). Of the reads, only `list_requests` runs the kinds' code (it asks each kind whether
+/// the person may submit it), so only it may answer 503.
 fn reading(id: &str, tag: &str, summary: &str, parameters: Vec<Json>, ok: Json, unasked: bool, unseen: Option<&str>) -> Json {
     let mut o = vec![("operationId".to_string(), Json::str(id)), ("tags".into(), Json::arr([Json::str(tag)])), ("summary".into(), Json::str(summary))];
     if !parameters.is_empty() {
         o.push(("parameters".into(), Json::Arr(parameters)));
     }
-    o.push(("responses".into(), answered(ok, false, unasked.then_some("unasked"), unseen, false, false)));
+    o.push(("responses".into(), answered(ok, false, unasked.then_some("unasked"), unseen, false, false, id == "list_requests")));
     Json::Obj(o)
 }
 
@@ -630,7 +641,7 @@ fn working(id: &str, summary: &str, k: &Kind, ticket: bool) -> Json {
     }
     o.push(("requestBody".into(), body(r(&format!("{n}.worked.in")))));
     let unseen = if ticket { "unseen" } else { "unoffered" };
-    o.push(("responses".into(), answered(json_response("What the form works out", r(&format!("{n}.worked.out"))), false, Some("unworked"), Some(unseen), false, true)));
+    o.push(("responses".into(), answered(json_response("What the form works out", r(&format!("{n}.worked.out"))), false, Some("unworked"), Some(unseen), false, true, true)));
     o.push(("x-ritsu-request".into(), Json::obj([("file", Json::str(&k.file)), ("name", Json::str(n)), ("version", Json::int(k.version))])));
     Json::Obj(o)
 }
@@ -927,7 +938,7 @@ pub(super) fn json(kinds: &[Kind]) -> Json {
         let mut o = vec![("operationId".to_string(), Json::str(&id)), ("tags".into(), Json::arr([Json::str("organization")])), ("summary".into(), Json::str(&summary)), ("parameters".into(), Json::Arr(ps))];
         let master = id.starts_with("find_master_");
         let unseen = if master { Some("unchosen") } else { Some("no_organization") };
-        o.push(("responses".into(), answered(json_response("The values found", r("found")), false, Some("unasked"), unseen, false, false)));
+        o.push(("responses".into(), answered(json_response("The values found", r("found")), false, Some("unasked"), unseen, false, false, false)));
         paths.push((path, Json::obj([("get", Json::Obj(o))])));
     }
     let one_found = object(
@@ -1016,6 +1027,14 @@ pub(super) fn json(kinds: &[Kind]) -> Json {
             Json::obj([
                 ("description", Json::str(LIMITED)),
                 ("headers", Json::obj([("Retry-After", Json::obj([("description", Json::str(RETRY_AFTER)), ("schema", Json::obj([("type", Json::str("integer")), ("minimum", Json::int(1))]))]))])),
+                ("content", Json::obj([("application/json", Json::obj([("schema", r("error"))]))])),
+            ]),
+        ),
+        (
+            "unavailable",
+            Json::obj([
+                ("description", Json::str(UNAVAILABLE)),
+                ("headers", Json::obj([("Retry-After", Json::obj([("description", Json::str(RETRY_UNAVAILABLE)), ("schema", Json::obj([("type", Json::str("integer")), ("minimum", Json::int(1))]))]))])),
                 ("content", Json::obj([("application/json", Json::obj([("schema", r("error"))]))])),
             ]),
         ),
