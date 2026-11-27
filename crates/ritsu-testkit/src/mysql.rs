@@ -323,18 +323,30 @@ impl MySql {
     }
 }
 
-/// A port with the `n - 1` after it free, on 127.0.0.1.
+/// A port with the `n - 1` after it free on every address, among 10000 to 31999: below the ports
+/// the system hands out to connections (32768 on, on Linux; 49152 on, on macOS). vtcombo listens
+/// on every address, and a port of those chosen once on 127.0.0.1 was taken by a connection, or was
+/// in use on another address, when it bound (bind: address already in use), twice in one CI run.
 fn free_ports(n: u16) -> Result<u16, String> {
-    for _ in 0..50 {
-        let first = std::net::TcpListener::bind("127.0.0.1:0").and_then(|l| l.local_addr()).map(|a| a.port()).map_err(|e| e.to_string())?;
-        if first > u16::MAX - n {
-            continue;
-        }
-        if (1..n).all(|i| std::net::TcpListener::bind(("127.0.0.1", first + i)).is_ok()) {
+    const LOW: u64 = 10_000;
+    const SPAN: u64 = 22_000;
+    // where to look first: another place for each process and each call
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0);
+    let mut x = (u64::from(std::process::id()) << 32) ^ now ^ (CALLS.fetch_add(1, Ordering::SeqCst) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    for _ in 0..200 {
+        // splitmix64
+        x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = x;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        let first = (LOW + z % (SPAN - u64::from(n))) as u16;
+        if (0..n).all(|i| std::net::TcpListener::bind(("0.0.0.0", first + i)).is_ok()) {
             return Ok(first);
         }
     }
-    Err(format!("no {n} ports in a row are free on 127.0.0.1"))
+    Err(format!("no {n} ports in a row are free on every address among {LOW} to {}", LOW + SPAN - 1))
 }
 
 /// The start of the short name under /tmp of a Vitess's data, before `<pid>-<n>`.
