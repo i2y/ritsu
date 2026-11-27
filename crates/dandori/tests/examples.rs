@@ -4659,17 +4659,25 @@ fn argo_at_once() -> usize {
 }
 static ARGO_SLOTS: (std::sync::Mutex<usize>, std::sync::Condvar) = (std::sync::Mutex::new(0), std::sync::Condvar::new());
 
-/// Wait for a slot among the flows going at once on Argo, and hold it while `f` runs.
+/// Wait for a slot among the flows going at once on Argo, and hold it while `f` runs. The slot is
+/// freed however `f` ends: a runner stopped at its limit panics, and a slot it kept would leave the
+/// flows still waiting for one to wait for ever (the test then stood until the job's limit).
 fn with_argo_slot<T>(f: impl FnOnce() -> T) -> T {
+    struct Slot;
+    impl Drop for Slot {
+        fn drop(&mut self) {
+            let (lock, freed) = &ARGO_SLOTS;
+            *lock.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+            freed.notify_one();
+        }
+    }
     let at_once = argo_at_once();
     let (lock, freed) = &ARGO_SLOTS;
     let mut going = freed.wait_while(lock.lock().unwrap_or_else(|e| e.into_inner()), |n| *n >= at_once).unwrap_or_else(|e| e.into_inner());
     *going += 1;
     drop(going);
-    let out = f();
-    *lock.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
-    freed.notify_one();
-    out
+    let _slot = Slot;
+    f()
 }
 
 /// Make a flow ready for Argo (its scenarios, the reference's runs, the build) and run the runner

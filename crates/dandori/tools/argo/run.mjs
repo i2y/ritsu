@@ -321,14 +321,15 @@ const own = new Map((spec.own ?? []).map((t) => [t.name, t]));
 const mount = { name: "dandori-code", mountPath: "/app" };
 for (const t of wt.spec.templates) {
   if ((t.steps ?? []).some((group) => group.some((s) => s.withSequence !== undefined))) t.parallelism = 1;
-  // a wait goes on at once; a callback's wait is answered by the runner
-  if (t.suspend && !(t.inputs?.parameters ?? []).some((p) => p.name === "callback_id")) t.suspend.duration = "0";
+  const takes = (name) => (t.inputs?.parameters ?? []).some((p) => p.name === name);
+  // a wait goes on at once (a `wait until` takes its seconds as well); a callback's wait is answered by the runner
+  if (t.suspend && !takes("callback_id")) t.suspend.duration = "0";
   // The wait of a callback with `timeout until` lasts the seconds to that time, one where it has passed
   // (a scenario may answer a date with a moment before the run's `now`), and so it can end before the
   // runner answers. The runner answers every callback, a timeout with what the wait gives when it ends,
   // so the wait is given a day, what one without a timeout of its own waits; but for the tests of the
   // limits.
-  if (t.suspend && !LIMITS && (t.inputs?.parameters ?? []).some((p) => p.name === "seconds")) t.suspend.duration = "86400";
+  if (t.suspend && !LIMITS && takes("callback_id") && takes("seconds")) t.suspend.duration = "86400";
   // A pod's deadline (`activeDeadlineSeconds`, a task's `timeout`) runs from the moment the kubelet takes the pod up,
   // before its containers start: with every run at once, that is seconds in this cluster. A pod that ends by itself
   // just as the deadline passes is marked DeadlineExceeded, and Argo puts that message in the node in place of the
