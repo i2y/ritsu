@@ -270,7 +270,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     // A pass is run where its files were generated (§15.277), and its tools are looked for only
     // then: an extra `gen` was not asked for needs nothing here. The rules, not the `enums` files.
     let rules: Vec<&String> = aliases.iter().filter(|a| !prereq_only.contains(a)).collect();
-    let somewhere = |plan: &dyn Fn(&str, &str) -> crate::backend::Plan| rules.iter().any(|a| on_disk(dir, &plan(a, &a.replace('_', ""))));
+    let somewhere = |plan: &dyn Fn(&str, &str) -> crate::backend::Plan| rules.iter().any(|a| on_disk(dir, &plan(a, &crate::backend::go_package(a))));
     // The Rust runner once more as a WASI module under wasmtime (§15.63): the shape a host
     // that speaks through stdin and stdout gives a rule — Fastly Compute, Spin, a batch step.
     // Not Shopify Functions: those export a named function and read the input through the
@@ -438,7 +438,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             }
         }
         if prereq_only.contains(alias) {
-            let pkg = alias.replace('_', "");
+            let pkg = crate::backend::go_package(alias);
             for b in present.iter().filter(|b| b.prereqs) {
                 if !wrote(dir, b.id, &crate::backend::stem(b, alias)) {
                     continue;
@@ -467,7 +467,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         let calls = std::fs::read_to_string(&traces_path)
             .map(|s| s.lines().filter(|l| l.contains("\"step\":")).count())
             .unwrap_or(0);
-        let pkg = alias.replace('_', "");
+        let pkg = crate::backend::go_package(alias);
         // The display names every language has to give back, where the rule gives any (§15.211).
         let labels_in = dir.join("vectors").join(format!("{alias}.labels.tsv"));
         let labels_want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.labels.expected"))).ok();
@@ -677,7 +677,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     // Unit vectors of the rounding helpers. Every rule emits the same ones, so run just one. An
     // `enums` file emits none (§15.222): with nothing but its functions there, there are none to run.
     if let Some(first) = aliases.iter().find(|a| !prereq_only.contains(a)) {
-        let pkg0 = first.replace('_', "");
+        let pkg0 = crate::backend::go_package(first);
         for b in &present {
             // Same reason as above: a backend nothing was written for has no helpers either, and one
             // written without its round test (§15.277) has none to run.
