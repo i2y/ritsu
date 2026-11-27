@@ -1205,6 +1205,9 @@ flow
 
 /// SIGTERM of `ritsu` reaches cargo's own process group, so the build does not wait
 /// for the tool that would otherwise run on, and the scratch directory goes with the failed run.
+/// The waits are long enough for a machine busy with the other tests (a debug build of ritsu checks
+/// and writes the kind for over ten seconds before it starts cargo), and end as soon as what they
+/// wait for happens; ritsu's error output is kept to say why it stopped before cargo, if it does.
 #[cfg(unix)]
 #[test]
 fn a_stopped_build_stops_cargo_and_cleans_its_scratch() {
@@ -1236,10 +1239,11 @@ while true; do sleep 1; done
     for v in common::LANG_VARS {
         c.env_remove(v);
     }
-    c.env("TMPDIR", &scratch).env("CARGO", &fake).env("FAKE_CARGO_LOG", &log);
+    let errors = scratch.join("ritsu.err");
+    c.env("TMPDIR", &scratch).env("CARGO", &fake).env("FAKE_CARGO_LOG", &log).stderr(std::fs::File::create(&errors).unwrap());
     let mut child = c.spawn().expect("could not run ritsu");
     let mut cargo_pid = None;
-    for _ in 0..300 {
+    for _ in 0..3000 {
         if let Ok(text) = std::fs::read_to_string(&log)
             && let Some(pid) = text.lines().next().and_then(|x| x.trim().parse::<i32>().ok())
         {
@@ -1252,13 +1256,18 @@ while true; do sleep 1; done
         std::thread::sleep(Duration::from_millis(100));
     }
     let Some(cargo_pid) = cargo_pid else {
+        let ended = child.try_wait().unwrap();
         let _ = child.kill();
-        panic!("the build did not reach the fake cargo");
+        let said = std::fs::read_to_string(&errors).unwrap_or_default();
+        match ended {
+            Some(status) => panic!("ritsu ended ({status}) before it started the fake cargo:\n{said}"),
+            None => panic!("the build did not reach the fake cargo in 300 seconds:\n{said}"),
+        }
     };
     unsafe extern "C" { fn kill(pid: i32, sig: i32) -> i32; }
     assert_eq!(unsafe { kill(child.id() as i32, 15) }, 0);
     let mut finished = false;
-    for _ in 0..80 {
+    for _ in 0..600 {
         if child.try_wait().unwrap().is_some() {
             finished = true;
             break;
