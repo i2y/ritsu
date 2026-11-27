@@ -2080,7 +2080,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - dandori は、`ritsu dandori` の本体（`ritsu` のライブラリの `languages::dandori`）で走らせる。フローの規則、日付のファイル、帳簿の口と、X2 で決められない前提（7.4）を同じプロセスの中で渡すので、日付と帳簿を使うフロー（請求の例）も、バイナリと同じに答える。バイナリ（`src/main.rs`）とページは同じ関数を呼ぶ。
 - rulec の E129（koyomi をつないでいない rulec で `range from koyomi` を確かめた）の注と台帳は、koyomi が無いところとして rulec のクレートのバイナリだけを挙げる。このページは koyomi をつなぐ（rulec の §15.185）。
 
-`ritsu.wasm` は 27,307,118 バイト（gzip で 8,041,982 バイト。2026-11-21）で、十の言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname と ringi のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
+`ritsu.wasm` は 27,472,028 バイト（gzip で 8,090,023 バイト。2026-11-27）で、十の言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname と ringi のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
 
 **部品と二つのページ。** 部品は `website/docs/playground/` の七つのファイルである。ページの部分を全部作る `playground.js`（ES のモジュール）、`playground.css`、モジュールを動かす `worker.js`、エディターと Markdown のライブラリをまとめた `libraries.js`、開くプロジェクトの `projects.json`、言語ごとに色を付ける語の `words.json`、`ritsu.wasm`。日本語のサイトへは、`website/sync.sh` がこの七つをコピーする（`docs-ja/playground` はコミットしない）。ページが書くのは部品の要素（`<div class="pg" data-lang="en">`）と、`playground.js` を読む `<script type="module">` だけで、上の帯、ファイルのタブ、エディター、右側のタブは `playground.js` が作る。二つのページの違いは並べ方だけで、CSS が決める。
 
@@ -2123,7 +2123,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - dandori の例：前の dandori のページが並べたフロー（最初の下書きと、例の版と、版の横のフロー）の英日で 38 本、プロジェクトは 37（下書きは一つで、両方のページに出る）。プロジェクトは、フローと、フローが読むファイル（規則、API の記述、子のフロー、日付のファイルとそれが使うカレンダー、帳簿）からなる。★パスは dandori のクレートの中のままにしたので、指摘の場所は前のページと同じ `tests/fixtures/hotel_naive.flow:95:1` になる。読むファイルは手で挙げない。テストが dandori の例を全部メモリに置き、`ritsu check` と `dandori doc` がフローを読むときに読んだファイルを記録し、読んだファイルにも `ritsu check` をかけて、新しく読むものが無くなるまで繰り返す。生成の対象は、前のページと同じく版のディレクトリで決める（AWS 版は Step Functions。Step Functions が受け付けない版は Lambda durable functions）。選択の名前は、前のページの言い方を使う（rulec はボタンの五つ、dandori は「例・版」）。
 - chobo の例：`crates/chobo/examples` の四つ（在庫の引当、ポイント、返金、マーケットプレイス）の英日で八つのプロジェクト。どれも帳簿一つで、ファイルの名前は例のファイルの名前（`inventory.book`、`inventory.ja.book`）。chobo のサイトのナビとホームが `chobo/refunds`（日本語のサイトは `chobo/refunds.ja`）を開く。
 - sekisho の例：`crates/sekisho/examples/refunds` の二つの版を、ゲートとゲートが読むファイル（規則、日付のファイル、カレンダーとそのデータ、OpenAPI の文書、フロー）のプロジェクトにした。英語のページに `sekisho/refunds`、日本語のページに `sekisho/refunds.ja`。読むファイルは、dandori の例と同じく、`ritsu check` と `sekisho doc` が読むものを、増えなくなるまでたどって決める。ページの中では、sekisho もファイルを ritsu-base の `fs` で読み書きする。
-- `projects.json` の形は `{"projects": [{"name", "group", "lang"?, "open", "target"?, "files": [[パス, もと]]}], "texts": {もと: 中身}}`。もとはリポジトリの中のパスで（モジュールの例は、テストが例のコピーに作ったファイルを、例のディレクトリの中のパスで書く。17.22）、中身はもとごとに一度だけ書く（Stripe の API の記述は七つのプロジェクトが持つ）。64 のプロジェクトと 210 の中身で、662,810 バイト（gzip で 114,030 バイト。2026-11-04）。テストが、もとのファイルから書く（`RITSU_BLESS=1`）。
+- `projects.json` の形は `{"projects": [{"name", "group", "lang"?, "open", "target"?, "files": [[パス, もと]]}], "texts": {もと: 中身}}`。もとはリポジトリの中のパスで（モジュールの例は、テストが例のコピーに作ったファイルを、例のディレクトリの中のパスで書く。17.22）、中身はもとごとに一度だけ書く（Stripe の API の記述は七つのプロジェクトが持つ）。68 のプロジェクトと 230 の中身で、704,709 バイト（gzip で 122,866 バイト。2026-11-27）。テストが、もとのファイルから書く（`RITSU_BLESS=1`）。
 
 **共有のリンク。** 「リンクをコピー」を押すと、いまのプロジェクトへのリンクをアドレスバーに入れる（ブラウザが許せばクリップボードにも）。形は `#project=<名前>&file=<パス>&view=<check|gen|doc|markdown>&target=<対象>&edits=<変えたもの>` で、`file` は開いたときと違うとき、`view` は問題（`check`）でないとき、`target` は生成したコードを見ているとき、`edits` は変えたものがあるときだけ書く。`target` は出力先の名前で、chobo の帳簿は `chobo gen` のフラグと同じく `target=<言語>&books=<データベース>` と書く（`books` の無いリンクは postgres と読む）。ページはどこにも保存しない。
 
@@ -5082,7 +5082,7 @@ warning[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` re
   - 中身は、`shop` のファイルと同梱のコピーである。テストが例をコピーし、`pricing` と `shop` の `require` をレジストリの形に書き換え、`tax` と `pricing` を決まった日付で置き場に置き（`put_directory`）、その置き場で lock を書き、`ritsu mod vendor` で作る。開くファイルはフロー（`orders/place_order.flow`、`注文/注文を受ける.flow`）である。
   - `projects.json` のもと（8.7）は、例のディレクトリの中のパスで書く。18 のファイルのうち、`ritsu.mod` は書き換えたもので、`ritsu.lock` と同梱のコピー（あわせて 13）はリポジトリに無い（テストが作る）。
   - lock は ritsu の版を持つので、版を上げたら `projects.json` を作り直す（`RITSU_BLESS=1` で `tests/playground.rs` を走らせる）。
-- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直す。大きさは 27,307,118 バイトである（2026-11-21。モジュールの仕組みを入れる前にコミットしてあったものは 16,566,997 バイト）。
+- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直す。大きさは 27,472,028 バイトである（2026-11-27。モジュールの仕組みを入れる前にコミットしてあったものは 16,566,997 バイト）。
 - 試験（`crates/ritsu/tests/playground.rs`）：
   - `a_dependency_from_git_in_the_copy_answers_as_the_command_does`：`modules` の `pricing` を git から取る形に書き換えた木（`require … git` と lock の `git` の行と同梱のコピー）で、40 の答えをバイナリと比べる（2026-10-29）。
   - `a_file_of_bytes_goes_in_as_its_bytes`：koyomi のカレンダーと Shift_JIS の CSV を `base64` で渡し、8 の答えをバイナリと比べ、読めない項目の文を確かめる。
