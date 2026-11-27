@@ -48,8 +48,9 @@ jobs:
   tools:
     name: tools (${{ matrix.group }}${{ matrix.part && format(', {0}', matrix.part) || '' }})
     runs-on: ubuntu-24.04
-    # The longest of these, rulec's first job and the others', take about 50 minutes (DESIGN 10.5)
-    timeout-minutes: 120
+    # The longest of these is rulec's first job: 80 to 108 minutes with 0.56.0's tests, and one on
+    # main was cut at 120 as it saved its cache, every test passed (DESIGN 10.5)
+    timeout-minutes: 180
 
     strategy:
       fail-fast: false
