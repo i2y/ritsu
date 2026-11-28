@@ -56,15 +56,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # rulec's tests in two jobs side by side, with the same tools: the second runs the tests
-          # RULEC_LONG_TESTS names (in the env of the step that runs the tests), the first every
-          # other. The two read the one list, with `--exact` and with `--skip`, so each test runs in
-          # one of them, and a test the list does not name runs in the first.
+          # rulec's tests in three jobs side by side, with the same tools: the second and the third
+          # run the tests RULEC_LONG_TESTS_1 and RULEC_LONG_TESTS_2 name (in the env of the step that
+          # runs the tests), one at a time, and the first every other. The three read the two lists,
+          # with `--exact` and with `--skip`, so each test runs in one of them, and a test neither
+          # list names runs in the first.
           - group: rulec
-            crates: -p rulec -- --exact $(printf -- '--skip %s ' $RULEC_LONG_TESTS)
+            crates: -p rulec -- --exact $(printf -- '--skip %s ' $RULEC_LONG_TESTS_1 $RULEC_LONG_TESTS_2)
           - group: rulec
-            part: long tests
-            crates: -p rulec -- --exact $RULEC_LONG_TESTS
+            part: long tests, part 1 of 2
+            crates: -p rulec -- --exact --test-threads=1 $RULEC_LONG_TESTS_1
+          - group: rulec
+            part: long tests, part 2 of 2
+            crates: -p rulec -- --exact --test-threads=1 $RULEC_LONG_TESTS_2
           - group: dandori
             # the npm package's tests are the job `npm`'s
             crates: "-p dandori -p ritsu -- --skip npm::"
@@ -514,16 +518,21 @@ jobs:
       - name: The tests of the tools level
         env:
           # The tests of rulec that run the generated code of many rules in every way `rulec test`
-          # reaches it, the longest of its suite: they take a runner of their own (the matrix).
-          RULEC_LONG_TESTS: >-
+          # reaches it, the longest of its suite, in two lists of about 50 minutes each: each list
+          # takes a runner of its own (the matrix) and runs one test at a time. Each of these tests
+          # builds in every language in four directories at once, and the runner was lost twice
+          # while two of them ran side by side (DESIGN 10.5). A name two files share (own_names.rs
+          # and spellings.rs) picks the test in each.
+          RULEC_LONG_TESTS_1: >-
             every_rule_of_the_tree_that_applies_another_runs_alike
-            every_language_answers_alike
-            every_way_answers_a_whole_number_in_any_spelling_as_the_integer
-            評価器と生成コードが全言語で一致する
-            the_generated_code_agrees_in_every_language_the_warning_does_not_name
             an_alias_where_the_finding_says_makes_every_language_agree
             the_code_generated_from_every_draft_answers_alike_in_every_language
+            評価器と生成コードが全言語で一致する
+            every_way_answers_a_whole_number_in_any_spelling_as_the_integer
+          RULEC_LONG_TESTS_2: >-
             every_rule_of_the_tree_is_silent_under_each_strict_checker
+            the_generated_code_agrees_in_every_language_the_warning_does_not_name
+            every_language_answers_alike
         run: cargo xtask test --level tools ${{ matrix.crates }}
 
       # --- What rulec's ci.yml ran beside `cargo test`, in the first of rulec's two jobs.
