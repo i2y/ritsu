@@ -24,7 +24,7 @@ esac
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-curl -fsSL -o "$tmp/$file" "https://cdn.mysql.com/Downloads/MySQL-8.4/$file"
+curl -fsSL --retry 10 --retry-max-time 600 -o "$tmp/$file" "https://cdn.mysql.com/Downloads/MySQL-8.4/$file"
 
 if command -v sha256sum > /dev/null; then
   got=$(sha256sum "$tmp/$file" | cut -d ' ' -f 1)

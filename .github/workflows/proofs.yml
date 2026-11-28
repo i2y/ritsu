@@ -149,7 +149,7 @@ jobs:
         run: |
           set -eu
           if [ ! -x "$HOME/.elan/bin/lake" ]; then
-            curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+            curl -sSfL --retry 10 --retry-max-time 600 https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
           fi
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 

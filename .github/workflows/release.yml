@@ -104,7 +104,7 @@ jobs:
           set -eu
           d="$RUNNER_TEMP/cargo-auditable"
           mkdir -p "$d"
-          curl -fsSL -o "$d/a.tar.xz" "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-${{ matrix.host }}.tar.xz"
+          curl -fsSL --retry 10 --retry-max-time 600 -o "$d/a.tar.xz" "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-${{ matrix.host }}.tar.xz"
           echo "${{ matrix.auditable_sha256 }}  $d/a.tar.xz" | shasum -a 256 -c -
           tar -xJf "$d/a.tar.xz" -C "$d" --strip-components=1
           echo "$d" >> "$GITHUB_PATH"
@@ -173,7 +173,7 @@ jobs:
           set -eu
           d="$RUNNER_TEMP/cargo-auditable"
           mkdir -p "$d"
-          curl -fsSL -o "$d/a.tar.xz" "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-x86_64-unknown-linux-gnu.tar.xz"
+          curl -fsSL --retry 10 --retry-max-time 600 -o "$d/a.tar.xz" "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-x86_64-unknown-linux-gnu.tar.xz"
           echo "4c8d3b08c3c34e9f2333367224dbbfb4aab68067698b43de59fe19aded3416dd  $d/a.tar.xz" | shasum -a 256 -c -
           tar -xJf "$d/a.tar.xz" -C "$d" --strip-components=1
           echo "$d" >> "$GITHUB_PATH"

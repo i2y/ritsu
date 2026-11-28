@@ -26,7 +26,7 @@ esac
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-curl -fsSL -o "$tmp/$zip" "https://github.com/tigerbeetle/tigerbeetle/releases/download/$VERSION/$zip"
+curl -fsSL --retry 10 --retry-max-time 600 -o "$tmp/$zip" "https://github.com/tigerbeetle/tigerbeetle/releases/download/$VERSION/$zip"
 
 if command -v sha256sum > /dev/null; then
   got=$(sha256sum "$tmp/$zip" | cut -d ' ' -f 1)
